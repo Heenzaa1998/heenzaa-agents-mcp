@@ -85,6 +85,7 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
+  MCP_AUTH_TOKEN: optionalString,
   METRICS_PREFIX: z.string().trim().default("nextjs_drizzle_"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   OTEL_EXPORTER_OTLP_ENDPOINT: httpUrlSchema.default("http://127.0.0.1:4318"),
@@ -108,6 +109,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env) {
     DATABASE_URL: source.DATABASE_URL,
     KIE_API_KEY: source.KIE_API_KEY,
     LOG_LEVEL: source.LOG_LEVEL,
+    MCP_AUTH_TOKEN: source.MCP_AUTH_TOKEN,
     METRICS_PREFIX: source.METRICS_PREFIX,
     NODE_ENV: source.NODE_ENV,
     OTEL_EXPORTER_OTLP_ENDPOINT: source.OTEL_EXPORTER_OTLP_ENDPOINT,

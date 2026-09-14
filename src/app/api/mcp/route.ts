@@ -6,6 +6,7 @@ import {
 import { editImage, generateImage } from "@/features/image-generation/service";
 import { AppError } from "@/server/errors/app-error";
 import { observeRoute } from "@/server/http/observed-route";
+import { withStaticAuth } from "@/server/http/static-auth";
 import type { KieImageResult } from "@/server/kie/client";
 
 // Image generation polls KIE until the task completes (~10-60s). Give the
@@ -80,8 +81,15 @@ const mcpHandler = createMcpHandler(
   },
 );
 
-const observedGet = observeRoute({ method: "GET", route: ROUTE }, mcpHandler);
-const observedPost = observeRoute({ method: "POST", route: ROUTE }, mcpHandler);
-const observedDelete = observeRoute({ method: "DELETE", route: ROUTE }, mcpHandler);
+// Protect the endpoint with a shared static token (no-op when MCP_AUTH_TOKEN is
+// unset). Kept inside observeRoute so 401s are still counted and logged.
+const guardedHandler = withStaticAuth(mcpHandler);
+
+const observedGet = observeRoute({ method: "GET", route: ROUTE }, guardedHandler);
+const observedPost = observeRoute({ method: "POST", route: ROUTE }, guardedHandler);
+const observedDelete = observeRoute(
+  { method: "DELETE", route: ROUTE },
+  guardedHandler,
+);
 
 export { observedGet as GET, observedPost as POST, observedDelete as DELETE };

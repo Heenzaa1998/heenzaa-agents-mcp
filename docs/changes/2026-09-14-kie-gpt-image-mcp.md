@@ -2,7 +2,7 @@
 
 - **วันที่:** 2026-09-14
 - **Design doc:** `docs/design/2026-09-14-kie-gpt-image-mcp.md`
-- **Commit / PR:** branch `feat/kie-gpt-image-mcp`
+- **Commit / PR:** PR #1 (branch `feat/kie-gpt-image-mcp`)
 
 ## เปลี่ยนอะไร
 
@@ -51,12 +51,15 @@ repo นี้ตั้งใจเป็นที่อยู่ของ agent
 - รัน `next dev` แล้วยิง MCP handshake ผ่าน curl: `initialize` คืน serverInfo ถูก,
   `tools/list` เห็นครบ 2 tools พร้อม JSON schema, และ `tools/call generate_image`
   ยิง KIE จริงได้รูปกลับ (~77s, ต่ำกว่าลิมิต 300s)
-- ยังไม่ได้ deploy ขึ้น Vercel / ต่อ claude.ai (สเต็ปถัดไป)
+- deploy ขึ้น Vercel production แล้ว: `https://heenzaa-agents-mcp.vercel.app/api/mcp`
+  (ตั้ง `KIE_API_KEY` เป็น env production+preview) เข้าถึงได้ ไม่มี auth wall
+- ทดสอบ `tools/call generate_image` บน production จริง ได้รูปกลับ (~90s < 300s →
+  Fluid compute ทำงาน)
 
 ## ตามมาทีหลัง
 
-- Deploy Vercel (เปิด Fluid compute ให้ `maxDuration=300`), ตั้ง `KIE_API_KEY` เป็น env,
-  ต่อเข้า claude.ai (Customize → Connectors → Add custom connector → `<url>/api/mcp`)
+- ต่อเข้า claude.ai (Customize → Connectors → Add custom connector →
+  `https://heenzaa-agents-mcp.vercel.app/api/mcp`) — เป็น action ฝั่งผู้ใช้
 - **Auth:** v1 ยังไม่มี — พึ่ง URL ลับ; เสริม OAuth (`withMcpAuth`) ทีหลัง
 - แนบรูป inline (base64) ในผลลัพธ์ tool เพื่อให้โชว์ในแชทเลย
 - `pnpm e2e` / `pnpm observability:test` สำหรับ route ใหม่ถ้าต้องการครอบคลุมเต็ม

@@ -1,0 +1,79 @@
+environments:
+  dev:
+    branch: develop
+    enabled: true
+    services:
+      web:
+        workload:
+          containerPort: 3000
+          replicas: 1
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: OTEL_TRACING_ENABLED
+              value: "false"
+            # For persistent/shared environments, override DATABASE_URL with a
+            # remote libSQL/Turso endpoint and provide DATABASE_AUTH_TOKEN from
+            # your platform secret store.
+        service:
+          port: 3000
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - paths:
+                - path: /
+                  pathType: Prefix
+        livenessProbe:
+          enabled: true
+          httpGet:
+            path: /api/health
+            port: 3000
+        readinessProbe:
+          enabled: true
+          httpGet:
+            path: /api/health
+            port: 3000
+
+  production:
+    branch: main
+    enabled: false # Enable when production infra and secrets are ready.
+    services:
+      web:
+        workload:
+          containerPort: 3000
+          # Keep this at 1 until DATABASE_URL points to a shared remote
+          # libSQL/Turso database. The default file-based SQLite mode should not
+          # be scaled across multiple replicas.
+          replicas: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: OTEL_TRACING_ENABLED
+              value: "false"
+        service:
+          port: 3000
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - paths:
+                - path: /
+                  pathType: Prefix
+        livenessProbe:
+          enabled: true
+          httpGet:
+            path: /api/health
+            port: 3000
+        readinessProbe:
+          enabled: true
+          httpGet:
+            path: /api/health
+            port: 3000

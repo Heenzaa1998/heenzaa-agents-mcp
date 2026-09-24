@@ -10,6 +10,8 @@ const USER_AGENT = "heenzaa-agents-mcp/0.1 (+https://kie.ai)";
 
 export const TEXT_TO_IMAGE_MODEL = "gpt-image-2-text-to-image";
 export const IMAGE_TO_IMAGE_MODEL = "gpt-image/1.5-image-to-image";
+export const TEXT_TO_VIDEO_MODEL = "kling-2.6/text-to-video";
+export const IMAGE_TO_VIDEO_MODEL = "kling-2.6/image-to-video";
 
 const POLL_TIMEOUT_MS = 240_000;
 const POLL_INTERVAL_MS = 3_000;
@@ -34,14 +36,37 @@ export type EditImageParams = {
   quality: string;
 };
 
+export type StartVideoParams = {
+  prompt: string;
+  // When set, the clip animates this image and takes its aspect ratio.
+  imageUrl?: string;
+  aspectRatio: string;
+  duration: string;
+  sound: boolean;
+};
+
+export type KieTaskStatus = {
+  taskId: string;
+  model: string;
+  // waiting | queuing | generating | success | fail
+  state: string;
+  progress?: number;
+  urls?: string[];
+  failReason?: string;
+};
+
 export type KieClient = {
   generateImage: (params: GenerateImageParams) => Promise<KieImageResult>;
   editImage: (params: EditImageParams) => Promise<KieImageResult>;
+  startVideo: (params: StartVideoParams) => Promise<{ taskId: string; model: string }>;
+  getTask: (taskId: string) => Promise<KieTaskStatus>;
 };
 
 type KiePayload = { code?: number; msg?: string; data?: unknown };
 
 type KieTaskData = {
+  model?: string;
+  progress?: number;
   state?: string;
   resultJson?: string;
   failCode?: string;
@@ -145,19 +170,33 @@ function parseResultUrls(resultJson: string | undefined): string[] {
   return urls;
 }
 
+// Returns null when KIE has no record for the task (yet).
+async function fetchTaskData(
+  apiKey: string,
+  taskId: string,
+): Promise<KieTaskData | null> {
+  const payload = await readJson(
+    await fetch(`${RECORD_INFO_URL}?taskId=${encodeURIComponent(taskId)}`, {
+      headers: authHeaders(apiKey),
+    }),
+    "recordInfo",
+  );
+
+  return (payload.data as KieTaskData | null | undefined) ?? null;
+}
+
+function failReasonOf(data: KieTaskData) {
+  return [data.failCode, data.failMsg].filter(Boolean).join(" ") || "Unknown failure.";
+}
+
 async function pollTask(
   apiKey: string,
   taskId: string,
 ): Promise<{ urls: string[]; creditsConsumed?: number }> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
-  const url = `${RECORD_INFO_URL}?taskId=${encodeURIComponent(taskId)}`;
 
   while (Date.now() <= deadline) {
-    const payload = await readJson(
-      await fetch(url, { headers: authHeaders(apiKey) }),
-      "recordInfo",
-    );
-    const data = (payload.data ?? {}) as KieTaskData;
+    const data = (await fetchTaskData(apiKey, taskId)) ?? {};
 
     if (data.state === "success") {
       return {
@@ -167,9 +206,7 @@ async function pollTask(
     }
 
     if (data.state === "fail") {
-      const reason = [data.failCode, data.failMsg].filter(Boolean).join(" ");
-
-      throw new AppError(`KIE task failed: ${reason}`.trim(), {
+      throw new AppError(`KIE task failed: ${failReasonOf(data)}`, {
         code: "kie_task_failed",
         statusCode: 502,
       });
@@ -261,6 +298,82 @@ export const kieClient: KieClient = {
         }
 
         return result;
+      },
+    );
+  },
+
+  // Video takes minutes, so this only creates the task; callers check on it
+  // later with getTask instead of holding the request open.
+  startVideo(params) {
+    const model = params.imageUrl ? IMAGE_TO_VIDEO_MODEL : TEXT_TO_VIDEO_MODEL;
+
+    return withSpan(
+      "kie.start_video",
+      {
+        attributes: {
+          "app.feature": "video-generation",
+          "app.operation": "start_video",
+          "kie.model": model,
+        },
+      },
+      async () => {
+        const input: Record<string, unknown> = {
+          prompt: params.prompt,
+          sound: params.sound,
+          duration: params.duration,
+        };
+
+        if (params.imageUrl) {
+          input.image_urls = [params.imageUrl];
+        } else {
+          input.aspect_ratio = params.aspectRatio;
+        }
+
+        const taskId = await createTask(requireApiKey(), model, input);
+
+        return { taskId, model };
+      },
+    );
+  },
+
+  getTask(taskId) {
+    return withSpan(
+      "kie.get_task",
+      {
+        attributes: {
+          "app.feature": "video-generation",
+          "app.operation": "get_task",
+        },
+      },
+      async (span) => {
+        const data = await fetchTaskData(requireApiKey(), taskId);
+
+        if (!data) {
+          throw new AppError(`KIE has no task with id ${taskId}.`, {
+            code: "kie_task_not_found",
+            statusCode: 404,
+          });
+        }
+
+        const status: KieTaskStatus = {
+          taskId,
+          model: data.model ?? "unknown",
+          state: data.state ?? "unknown",
+          progress: typeof data.progress === "number" ? data.progress : undefined,
+        };
+
+        span.setAttribute("kie.model", status.model);
+        span.setAttribute("kie.task.state", status.state);
+
+        if (data.state === "success") {
+          status.urls = parseResultUrls(data.resultJson);
+        }
+
+        if (data.state === "fail") {
+          status.failReason = failReasonOf(data);
+        }
+
+        return status;
       },
     );
   },

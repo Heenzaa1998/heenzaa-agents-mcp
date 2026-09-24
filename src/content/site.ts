@@ -133,7 +133,7 @@ export const operatingPrinciples = [
 export const bootstrapSteps = [
   "Copy .env.example to .env.local and decide whether OTEL tracing should be on for your environment.",
   "Run pnpm observability:up when you want Grafana Tempo available locally.",
-  "Run pnpm db:migrate to prepare the local SQLite database before feature work.",
+  "Pull DATABASE_URL for your Neon Postgres database, then run pnpm db:migrate before feature work.",
   "Use pnpm observability:test to verify traces, metrics, and middleware wiring end-to-end.",
 ] as const;
 

@@ -1,11 +1,13 @@
-import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
-export const subscribers = sqliteTable("subscribers", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const subscribers = pgTable("subscribers", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  // mode "string" keeps SubscriberRecord.createdAt a string, as it was on SQLite.
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export type SubscriberRecord = typeof subscribers.$inferSelect;

@@ -72,18 +72,22 @@ export async function createSubscriber(
   );
 }
 
-function isUniqueConstraintError(error: unknown) {
+// Postgres reports unique violations as SQLSTATE 23505. Drizzle may wrap the
+// driver error, so check the cause too, and fall back to the message text.
+function isUniqueConstraintError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
 
-  const message = error.message.toLowerCase();
+  if ((error as { code?: unknown }).code === "23505") {
+    return true;
+  }
 
-  return (
-    message.includes("sqlite_constraint") ||
-    message.includes("unique constraint failed") ||
-    message.includes("duplicate key")
-  );
+  if (error.message.toLowerCase().includes("duplicate key")) {
+    return true;
+  }
+
+  return isUniqueConstraintError(error.cause);
 }
 
 export type { CreateSubscriberInput };

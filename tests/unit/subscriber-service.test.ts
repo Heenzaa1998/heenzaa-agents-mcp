@@ -54,4 +54,29 @@ describe("createSubscriber", () => {
     });
     expect(repository.create).not.toHaveBeenCalled();
   });
+
+  it("maps a Postgres unique violation from a concurrent insert", async () => {
+    const driverError = Object.assign(new Error("insert failed"), {
+      code: "23505",
+    });
+    const repository = {
+      create: vi
+        .fn()
+        .mockRejectedValue(new Error("Failed query", { cause: driverError })),
+      findByEmail: vi.fn().mockResolvedValue(null),
+    };
+
+    await expect(
+      createSubscriber(
+        {
+          email: "jane@example.com",
+          name: "Jane Example",
+        },
+        repository,
+      ),
+    ).rejects.toMatchObject({
+      code: "subscriber_exists",
+      statusCode: 409,
+    });
+  });
 });

@@ -12,9 +12,8 @@ environments:
               value: production
             - name: OTEL_TRACING_ENABLED
               value: "false"
-            # For persistent/shared environments, override DATABASE_URL with a
-            # remote libSQL/Turso endpoint and provide DATABASE_AUTH_TOKEN from
-            # your platform secret store.
+            # Provide DATABASE_URL (Neon Postgres) from your platform secret
+            # store; the container keeps no local database.
         service:
           port: 3000
         ingress:
@@ -42,9 +41,7 @@ environments:
       web:
         workload:
           containerPort: 3000
-          # Keep this at 1 until DATABASE_URL points to a shared remote
-          # libSQL/Turso database. The default file-based SQLite mode should not
-          # be scaled across multiple replicas.
+          # The database is shared Neon Postgres, so replicas can scale.
           replicas: 1
           resources:
             requests:

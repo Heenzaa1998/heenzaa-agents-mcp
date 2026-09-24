@@ -61,12 +61,14 @@ const databaseUrlSchema = z
   .min(1, "DATABASE_URL is required")
   .refine(
     (value) =>
-      value.startsWith("file:") ||
-      value.startsWith("libsql:") ||
-      value.startsWith("http://") ||
-      value.startsWith("https://"),
-    "DATABASE_URL must start with file:, libsql:, http://, or https://",
+      value.startsWith("postgres://") || value.startsWith("postgresql://"),
+    "DATABASE_URL must start with postgres:// or postgresql://",
   );
+
+// Placeholder so build, unit tests and CI work without a database. The Neon
+// HTTP driver does not connect at import time; real queries need a real URL.
+const PLACEHOLDER_DATABASE_URL =
+  "postgresql://postgres:postgres@localhost:5432/postgres";
 
 const httpUrlSchema = z
   .string()
@@ -79,8 +81,8 @@ const httpUrlSchema = z
 
 const envSchema = z.object({
   APP_NAME: z.string().trim().min(1).default("Next.js Drizzle Template"),
-  DATABASE_AUTH_TOKEN: optionalString,
-  DATABASE_URL: databaseUrlSchema.default("file:local.db"),
+  DATABASE_URL: databaseUrlSchema.default(PLACEHOLDER_DATABASE_URL),
+  DATABASE_URL_UNPOOLED: databaseUrlSchema.optional(),
   KIE_API_KEY: optionalString,
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
@@ -109,8 +111,8 @@ const envSchema = z.object({
 export function createEnv(source: NodeJS.ProcessEnv = process.env) {
   return envSchema.parse({
     APP_NAME: source.APP_NAME,
-    DATABASE_AUTH_TOKEN: source.DATABASE_AUTH_TOKEN,
     DATABASE_URL: source.DATABASE_URL,
+    DATABASE_URL_UNPOOLED: source.DATABASE_URL_UNPOOLED || undefined,
     KIE_API_KEY: source.KIE_API_KEY,
     LOG_LEVEL: source.LOG_LEVEL,
     MCP_AUTH_TOKEN: source.MCP_AUTH_TOKEN,

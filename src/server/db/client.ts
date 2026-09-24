@@ -1,16 +1,13 @@
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import { env } from "@/server/env";
 import * as schema from "@/server/db/schema";
 
+// Neon's HTTP driver: each query is a stateless HTTPS request, so there is no
+// connection pool to manage on serverless. It only talks to Neon.
 function createDatabase() {
-  const client = createClient({
-    url: env.DATABASE_URL,
-    authToken: env.DATABASE_AUTH_TOKEN,
-  });
-
   return drizzle({
-    client,
+    client: neon(env.DATABASE_URL),
     schema,
   });
 }

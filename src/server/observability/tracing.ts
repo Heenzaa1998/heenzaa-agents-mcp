@@ -50,7 +50,7 @@ export async function withDatabaseSpan<T>(
           "db.collection.name": options.table,
           "db.operation.name": options.operation,
           "db.query.summary": options.summary,
-          "db.system.name": "sqlite",
+          "db.system.name": "postgresql",
         },
         kind: SpanKind.CLIENT,
       },

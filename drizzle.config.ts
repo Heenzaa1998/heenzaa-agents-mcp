@@ -9,9 +9,10 @@ const env = createEnv(process.env);
 export default defineConfig({
   out: "./drizzle",
   schema: "./src/server/db/schema.ts",
-  dialect: "sqlite",
+  dialect: "postgresql",
   dbCredentials: {
-    url: env.DATABASE_URL,
+    // Neon recommends a direct (non-pooled) connection for migrations.
+    url: env.DATABASE_URL_UNPOOLED ?? env.DATABASE_URL,
   },
   strict: true,
   verbose: true,

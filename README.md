@@ -29,7 +29,7 @@ The template is intentionally not enterprise-heavy. Route files stay thin, featu
 - Playwright `1.58.2`
 - Drizzle ORM `0.45.1`
 - Drizzle Kit `0.31.9`
-- libSQL client `0.17.0`
+- Neon serverless driver `1.1.0` (Postgres over HTTP)
 
 `eslint` is pinned to `9.39.4` because `eslint-config-next@16.1.6` still peers against the `9.x` line.
 
@@ -84,25 +84,24 @@ Build the migration image:
 docker build --target migrator -t nextjs-drizzle:migrator .
 ```
 
-Run migrations against a mounted SQLite volume:
+Run migrations against Neon (use the direct, non-pooled URL):
 
 ```bash
-docker run --rm -v nextjs-drizzle-data:/app/data nextjs-drizzle:migrator
+docker run --rm -e DATABASE_URL_UNPOOLED=postgresql://... nextjs-drizzle:migrator
 ```
 
 Run the app:
 
 ```bash
-docker run --rm -p 3000:3000 -v nextjs-drizzle-data:/app/data nextjs-drizzle:prod
+docker run --rm -p 3000:3000 -e DATABASE_URL=postgresql://... nextjs-drizzle:prod
 ```
 
 Docker notes:
 
 - The runtime image uses Next.js `standalone` output.
 - The runtime image runs as a non-root user.
-- The default container database path is `file:/app/data/local.db`.
+- The database is Neon Postgres; pass `DATABASE_URL` at runtime. Nothing is stored in the container.
 - Use the `migrator` target before starting the app when schema changes exist.
-- If you move to remote libSQL/Turso, override `DATABASE_URL` and `DATABASE_AUTH_TOKEN`.
 
 ## Environment
 
@@ -110,8 +109,8 @@ Docker notes:
 
 ```bash
 APP_NAME=Next.js Drizzle Template
-DATABASE_URL=file:local.db
-DATABASE_AUTH_TOKEN=
+DATABASE_URL=postgresql://user:password@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL_UNPOOLED=postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
 LOG_LEVEL=info
 METRICS_PREFIX=nextjs_drizzle_
 OTEL_TRACING_ENABLED=false
@@ -124,8 +123,9 @@ OTEL_TRACE_SAMPLE_RATIO=1
 
 Notes:
 
-- Local development defaults to SQLite/libSQL file mode.
-- Production can stay on file mode for simple deployments or switch to remote libSQL/Turso later.
+- The database is Neon Postgres, reached through Neon's HTTP driver (it cannot talk to other Postgres servers).
+- On Vercel, the Neon integration sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`; locally, pull them with `vercel env pull`.
+- Migrations use `DATABASE_URL_UNPOOLED` when set, otherwise `DATABASE_URL`.
 - `OTEL_TRACING_ENABLED=false` by default so local app startup works without a collector.
 
 ## Project Shape

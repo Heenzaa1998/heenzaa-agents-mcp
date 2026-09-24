@@ -17,17 +17,16 @@ FROM deps AS builder
 COPY . .
 RUN pnpm build
 
+# DATABASE_URL (and DATABASE_URL_UNPOOLED for migrations) must be passed at
+# runtime, e.g. `docker run -e DATABASE_URL=postgresql://...`. The database is
+# Neon Postgres; nothing is stored inside the container.
 FROM deps AS migrator
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL=file:/app/data/local.db
 COPY . .
 RUN groupadd --system --gid 1001 nodejs \
-  && useradd --system --uid 1001 --gid nodejs nextjs \
-  && mkdir -p /app/data \
-  && chown nextjs:nodejs /app/data
+  && useradd --system --uid 1001 --gid nodejs nextjs
 USER nextjs
-VOLUME ["/app/data"]
 CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
 
 FROM node:${NODE_VERSION} AS runner
@@ -36,16 +35,12 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
-ENV DATABASE_URL=file:/app/data/local.db
 RUN groupadd --system --gid 1001 nodejs \
-  && useradd --system --uid 1001 --gid nodejs nextjs \
-  && mkdir -p /app/data \
-  && chown nextjs:nodejs /app/data
+  && useradd --system --uid 1001 --gid nodejs nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3000
-VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
 CMD ["node", "server.js"]

@@ -134,8 +134,12 @@ Relevant files:
 
 ## Database Rules
 
-- Default local DB is SQLite/libSQL via `DATABASE_URL=file:local.db` in local dev.
-- Container default DB path is `file:/app/data/local.db`.
+- The database is Neon Postgres, accessed with Neon's HTTP driver (`@neondatabase/serverless`
+  via `drizzle-orm/neon-http`). There is no local database file.
+- `DATABASE_URL` is required at runtime (pooled URL). Migrations use `DATABASE_URL_UNPOOLED`
+  when set. On Vercel both come from the Neon integration; locally, pull them with `vercel env pull`.
+- Dev, preview and production currently share one Neon branch, so local runs write to
+  production data. Clean up test rows, or give dev its own Neon branch.
 - Schema lives in `src/server/db/schema.ts`.
 - Use Drizzle migrations for schema changes:
   run `pnpm db:generate` and `pnpm db:migrate`
@@ -153,8 +157,8 @@ Recommended validation:
 ```bash
 docker build --target runner -t nextjs-drizzle:prod .
 docker build --target migrator -t nextjs-drizzle:migrator .
-docker run --rm -v nextjs-drizzle-data:/app/data nextjs-drizzle:migrator
-docker run --rm -p 3000:3000 -v nextjs-drizzle-data:/app/data nextjs-drizzle:prod
+docker run --rm -e DATABASE_URL_UNPOOLED=postgresql://... nextjs-drizzle:migrator
+docker run --rm -p 3000:3000 -e DATABASE_URL=postgresql://... nextjs-drizzle:prod
 ```
 
 ## Commands

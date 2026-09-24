@@ -8,6 +8,8 @@ import {
   generateImage,
   type ImageGenerationResult,
 } from "@/features/image-generation/service";
+import { listGenerationsSchema } from "@/features/generations/contracts";
+import { listGenerations } from "@/features/generations/service";
 import { getMediaUrlSchema } from "@/features/media/contracts";
 import { getMediaUrl, type MediaItem } from "@/features/media/service";
 import {
@@ -15,6 +17,7 @@ import {
   getTaskStatusSchema,
 } from "@/features/video-generation/contracts";
 import { getTaskStatus, startVideo } from "@/features/video-generation/service";
+import type { GenerationRecord } from "@/server/db/schema";
 import { AppError } from "@/server/errors/app-error";
 import { observeRoute } from "@/server/http/observed-route";
 import { withStaticAuth } from "@/server/http/static-auth";
@@ -45,6 +48,28 @@ function toToolResult(result: ImageGenerationResult) {
   ].join("\n");
 
   return textResult(text);
+}
+
+function describeGeneration(record: GenerationRecord) {
+  const prompt =
+    record.prompt.length > 100 ? `${record.prompt.slice(0, 97)}...` : record.prompt;
+  const lines = [
+    `#${record.id} ${record.kind} · ${record.status} · ${record.createdAt.slice(0, 16)} UTC · "${prompt}"`,
+  ];
+
+  if (record.status === "pending" && record.taskId) {
+    lines.push(`   task_id: ${record.taskId} (call get_task_status to finish it)`);
+  }
+
+  for (const ref of record.media) {
+    lines.push(ref.key ? `   key: ${ref.key}` : `   temporary url: ${ref.url}`);
+  }
+
+  if (record.error) {
+    lines.push(`   error: ${record.error}`);
+  }
+
+  return lines.join("\n");
 }
 
 function textResult(text: string) {
@@ -184,6 +209,34 @@ const mcpHandler = createMcpHandler(
           );
         } catch (error) {
           return toErrorResult(error, "Could not check the task.");
+        }
+      },
+    );
+
+    server.registerTool(
+      "list_generations",
+      {
+        title: "List past generations",
+        description:
+          "Search the history of images and videos made through this server, newest first. Returns storage keys (use get_media_url for a link) and task ids of unfinished videos.",
+        inputSchema: listGenerationsSchema,
+      },
+      async (args) => {
+        try {
+          const records = await listGenerations(args);
+
+          if (records.length === 0) {
+            return textResult("No generations match.");
+          }
+
+          return textResult(
+            [
+              `Found ${records.length} generation(s):`,
+              ...records.map(describeGeneration),
+            ].join("\n"),
+          );
+        } catch (error) {
+          return toErrorResult(error, "Could not list generations.");
         }
       },
     );

@@ -1,4 +1,10 @@
 import {
+  describeError,
+  generationLog,
+  toMediaRefs,
+  type GenerationLog,
+} from "@/features/generations/service";
+import {
   persistRemoteMedia,
   type MediaItem,
   type PersistOptions,
@@ -7,7 +13,12 @@ import {
   generateVideoSchema,
   getTaskStatusSchema,
 } from "@/features/video-generation/contracts";
-import { kieClient, type KieClient } from "@/server/kie/client";
+import {
+  IMAGE_TO_VIDEO_MODEL,
+  kieClient,
+  TEXT_TO_VIDEO_MODEL,
+  type KieClient,
+} from "@/server/kie/client";
 import { logger } from "@/server/logger";
 import { withSpan } from "@/server/observability/tracing";
 
@@ -36,6 +47,7 @@ export type TaskStatusResult = {
 export async function startVideo(
   input: unknown,
   client: VideoStarter = kieClient,
+  history: Pick<GenerationLog, "record"> = generationLog,
 ): Promise<StartVideoResult> {
   return withSpan(
     "video-generation.start",
@@ -47,6 +59,11 @@ export async function startVideo(
     },
     async (span) => {
       const parsed = generateVideoSchema.parse(input);
+      const entry = {
+        kind: "video" as const,
+        operation: "generate_video",
+        prompt: parsed.prompt,
+      };
 
       span.setAttribute(
         "app.video.mode",
@@ -54,17 +71,44 @@ export async function startVideo(
       );
       span.setAttribute("app.video.duration", parsed.duration);
 
-      const { taskId, model } = await client.startVideo({
-        prompt: parsed.prompt,
-        imageUrl: parsed.image_url,
-        aspectRatio: parsed.aspect_ratio,
-        duration: parsed.duration,
-        sound: parsed.sound,
+      let started;
+
+      try {
+        started = await client.startVideo({
+          prompt: parsed.prompt,
+          imageUrl: parsed.image_url,
+          aspectRatio: parsed.aspect_ratio,
+          duration: parsed.duration,
+          sound: parsed.sound,
+        });
+      } catch (error) {
+        await history.record({
+          ...entry,
+          model: parsed.image_url ? IMAGE_TO_VIDEO_MODEL : TEXT_TO_VIDEO_MODEL,
+          status: "fail",
+          taskId: null,
+          error: describeError(error),
+        });
+        throw error;
+      }
+
+      await history.record({
+        ...entry,
+        model: started.model,
+        status: "pending",
+        taskId: started.taskId,
       });
 
-      logger.info({ operation: "start_video", model }, "Video task started");
+      logger.info(
+        { operation: "start_video", model: started.model },
+        "Video task started",
+      );
 
-      return { taskId, model, duration: parsed.duration };
+      return {
+        taskId: started.taskId,
+        model: started.model,
+        duration: parsed.duration,
+      };
     },
   );
 }
@@ -73,6 +117,7 @@ export async function getTaskStatus(
   input: unknown,
   client: TaskReader = kieClient,
   persist: MediaPersister = persistRemoteMedia,
+  history: Pick<GenerationLog, "finish"> = generationLog,
 ): Promise<TaskStatusResult> {
   return withSpan(
     "video-generation.get_status",
@@ -102,6 +147,18 @@ export async function getTaskStatus(
         result.media = await persist(status.urls, {
           prefix: status.model.includes("video") ? "videos" : "images",
           taskId: status.taskId,
+        });
+
+        await history.finish(status.taskId, {
+          status: "success",
+          media: toMediaRefs(result.media),
+        });
+      }
+
+      if (status.state === "fail") {
+        await history.finish(status.taskId, {
+          status: "fail",
+          error: status.failReason ?? null,
         });
       }
 

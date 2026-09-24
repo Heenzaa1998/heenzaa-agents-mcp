@@ -10,6 +10,11 @@ import {
 } from "@/features/image-generation/service";
 import { getMediaUrlSchema } from "@/features/media/contracts";
 import { getMediaUrl, type MediaItem } from "@/features/media/service";
+import {
+  generateVideoSchema,
+  getTaskStatusSchema,
+} from "@/features/video-generation/contracts";
+import { getTaskStatus, startVideo } from "@/features/video-generation/service";
 import { AppError } from "@/server/errors/app-error";
 import { observeRoute } from "@/server/http/observed-route";
 import { withStaticAuth } from "@/server/http/static-auth";
@@ -27,7 +32,7 @@ function linkDays(item: MediaItem) {
 
 function describeItem(item: MediaItem, index: number) {
   if (item.key === null) {
-    return `${index + 1}. ${item.url}\n   Temporary provider link (expires in ~3 days); not saved to storage.`;
+    return `${index + 1}. ${item.url}\n   Temporary provider link (expires within days); not saved to storage.`;
   }
 
   return `${index + 1}. ${item.url}\n   Saved as ${item.key}. Link valid ${linkDays(item)} days; call get_media_url with this key for a fresh link.`;
@@ -39,6 +44,10 @@ function toToolResult(result: ImageGenerationResult) {
     ...result.media.map(describeItem),
   ].join("\n");
 
+  return textResult(text);
+}
+
+function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
 
@@ -114,6 +123,67 @@ const mcpHandler = createMcpHandler(
           };
         } catch (error) {
           return toErrorResult(error, "Could not get a media link.");
+        }
+      },
+    );
+
+    server.registerTool(
+      "generate_video",
+      {
+        title: "Generate video (Kling 2.6)",
+        description:
+          "Start a video from a text prompt, or animate an image by passing image_url. Returns a task_id immediately; video takes minutes, so call get_task_status with it to get the result.",
+        inputSchema: generateVideoSchema,
+      },
+      async (args) => {
+        try {
+          const started = await startVideo(args);
+
+          return textResult(
+            `Video task started (${started.model}, ${started.duration}s). task_id: ${started.taskId}\nGeneration can take up to about 10 minutes, most of it waiting in the provider's queue. Call get_task_status with this task_id to check progress; when it succeeds it returns the download link.`,
+          );
+        } catch (error) {
+          return toErrorResult(error, "Could not start the video.");
+        }
+      },
+    );
+
+    server.registerTool(
+      "get_task_status",
+      {
+        title: "Check a generation task",
+        description:
+          "Check a task started by generate_video. While running it reports progress; once finished it saves the file to storage and returns a download link plus a storage key.",
+        inputSchema: getTaskStatusSchema,
+      },
+      async (args) => {
+        try {
+          const status = await getTaskStatus(args);
+
+          if (status.state === "fail") {
+            return {
+              ...textResult(`Task ${status.taskId} failed: ${status.failReason}`),
+              isError: true,
+            };
+          }
+
+          if (status.media) {
+            return textResult(
+              [
+                `Task ${status.taskId} finished:`,
+                ...status.media.map(describeItem),
+              ].join("\n"),
+            );
+          }
+
+          const progress =
+            status.progress !== undefined ? ` (${status.progress}%)` : "";
+
+          return textResult(
+            `Task ${status.taskId} is ${status.state}${progress}. Not ready yet; check again in about a minute.`,
+          );
+        } catch (error) {
+          return toErrorResult(error, "Could not check the task.");
         }
       },
     );

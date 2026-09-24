@@ -2,17 +2,36 @@ import {
   editImageSchema,
   generateImageSchema,
 } from "@/features/image-generation/contracts";
-import { kieClient, type KieClient, type KieImageResult } from "@/server/kie/client";
+import {
+  persistRemoteMedia,
+  type MediaItem,
+  type PersistOptions,
+} from "@/features/media/service";
+import { kieClient, type KieClient } from "@/server/kie/client";
 import { logger } from "@/server/logger";
 import { withSpan } from "@/server/observability/tracing";
 
 type ImageGenerator = Pick<KieClient, "generateImage">;
 type ImageEditor = Pick<KieClient, "editImage">;
+type MediaPersister = (
+  urls: string[],
+  options: PersistOptions,
+) => Promise<MediaItem[]>;
+
+export type ImageGenerationResult = {
+  taskId: string;
+  media: MediaItem[];
+};
+
+function countStored(media: MediaItem[]) {
+  return media.filter((item) => item.key !== null).length;
+}
 
 export async function generateImage(
   input: unknown,
   client: ImageGenerator = kieClient,
-): Promise<KieImageResult> {
+  persist: MediaPersister = persistRemoteMedia,
+): Promise<ImageGenerationResult> {
   return withSpan(
     "image-generation.generate",
     {
@@ -33,15 +52,24 @@ export async function generateImage(
         resolution: parsed.resolution,
         background: parsed.background,
       });
+      const media = await persist(result.urls, {
+        prefix: "images",
+        taskId: result.taskId,
+      });
 
-      span.setAttribute("app.image.result_count", result.urls.length);
+      span.setAttribute("app.image.result_count", media.length);
+      span.setAttribute("app.image.stored_count", countStored(media));
 
       logger.info(
-        { operation: "generate_image", result_count: result.urls.length },
+        {
+          operation: "generate_image",
+          result_count: media.length,
+          stored_count: countStored(media),
+        },
         "Image generated",
       );
 
-      return result;
+      return { taskId: result.taskId, media };
     },
   );
 }
@@ -49,7 +77,8 @@ export async function generateImage(
 export async function editImage(
   input: unknown,
   client: ImageEditor = kieClient,
-): Promise<KieImageResult> {
+  persist: MediaPersister = persistRemoteMedia,
+): Promise<ImageGenerationResult> {
   return withSpan(
     "image-generation.edit",
     {
@@ -70,15 +99,24 @@ export async function editImage(
         aspectRatio: parsed.aspect_ratio,
         quality: parsed.quality,
       });
+      const media = await persist(result.urls, {
+        prefix: "images",
+        taskId: result.taskId,
+      });
 
-      span.setAttribute("app.image.result_count", result.urls.length);
+      span.setAttribute("app.image.result_count", media.length);
+      span.setAttribute("app.image.stored_count", countStored(media));
 
       logger.info(
-        { operation: "edit_image", result_count: result.urls.length },
+        {
+          operation: "edit_image",
+          result_count: media.length,
+          stored_count: countStored(media),
+        },
         "Image edited",
       );
 
-      return result;
+      return { taskId: result.taskId, media };
     },
   );
 }

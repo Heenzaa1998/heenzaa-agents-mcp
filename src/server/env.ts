@@ -100,6 +100,10 @@ const envSchema = z.object({
     z.number().min(0).max(1).default(1),
   ),
   OTEL_TRACING_ENABLED: optionalBoolean.pipe(z.boolean().default(false)),
+  R2_ACCESS_KEY_ID: optionalString,
+  R2_ACCOUNT_ID: optionalString,
+  R2_BUCKET: optionalString,
+  R2_SECRET_ACCESS_KEY: optionalString,
 });
 
 export function createEnv(source: NodeJS.ProcessEnv = process.env) {
@@ -119,6 +123,10 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env) {
     OTEL_TRACE_IGNORE_PATHS: source.OTEL_TRACE_IGNORE_PATHS,
     OTEL_TRACE_SAMPLE_RATIO: source.OTEL_TRACE_SAMPLE_RATIO,
     OTEL_TRACING_ENABLED: source.OTEL_TRACING_ENABLED,
+    R2_ACCESS_KEY_ID: source.R2_ACCESS_KEY_ID,
+    R2_ACCOUNT_ID: source.R2_ACCOUNT_ID,
+    R2_BUCKET: source.R2_BUCKET,
+    R2_SECRET_ACCESS_KEY: source.R2_SECRET_ACCESS_KEY,
   });
 }
 

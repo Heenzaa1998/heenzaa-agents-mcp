@@ -3,30 +3,46 @@ import {
   editImageSchema,
   generateImageSchema,
 } from "@/features/image-generation/contracts";
-import { editImage, generateImage } from "@/features/image-generation/service";
+import {
+  editImage,
+  generateImage,
+  type ImageGenerationResult,
+} from "@/features/image-generation/service";
+import { getMediaUrlSchema } from "@/features/media/contracts";
+import { getMediaUrl, type MediaItem } from "@/features/media/service";
 import { AppError } from "@/server/errors/app-error";
 import { observeRoute } from "@/server/http/observed-route";
 import { withStaticAuth } from "@/server/http/static-auth";
-import type { KieImageResult } from "@/server/kie/client";
 
-// Image generation polls KIE until the task completes (~10-60s). Give the
-// serverless function room to finish; Vercel Fluid compute allows up to 300s.
+// Image generation polls KIE until the task completes (~10-90s) and then copies
+// the file into storage. Vercel Fluid compute allows up to 300s.
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const ROUTE = "/api/mcp";
 
-function toToolResult(result: KieImageResult) {
-  const lines = result.urls.map((url, index) => `${index + 1}. ${url}`);
+function linkDays(item: MediaItem) {
+  return Math.round((item.expiresInSeconds ?? 0) / 86_400);
+}
+
+function describeItem(item: MediaItem, index: number) {
+  if (item.key === null) {
+    return `${index + 1}. ${item.url}\n   Temporary provider link (expires in ~3 days); not saved to storage.`;
+  }
+
+  return `${index + 1}. ${item.url}\n   Saved as ${item.key}. Link valid ${linkDays(item)} days; call get_media_url with this key for a fresh link.`;
+}
+
+function toToolResult(result: ImageGenerationResult) {
   const text = [
-    `Generated ${result.urls.length} image(s). URLs are hosted by KIE and expire in ~3 days:`,
-    ...lines,
+    `Generated ${result.media.length} image(s):`,
+    ...result.media.map(describeItem),
   ].join("\n");
 
   return { content: [{ type: "text" as const, text }] };
 }
 
-function toErrorResult(error: unknown) {
+function toErrorResult(error: unknown, summary: string) {
   const message =
     error instanceof AppError
       ? `${error.code}: ${error.message}`
@@ -35,7 +51,7 @@ function toErrorResult(error: unknown) {
         : "Unknown error.";
 
   return {
-    content: [{ type: "text" as const, text: `Image generation failed. ${message}` }],
+    content: [{ type: "text" as const, text: `${summary} ${message}` }],
     isError: true,
   };
 }
@@ -47,14 +63,14 @@ const mcpHandler = createMcpHandler(
       {
         title: "Generate image (GPT Image)",
         description:
-          "Create a new image from a text prompt using OpenAI GPT Image via KIE.ai. Returns hosted image URL(s).",
+          "Create a new image from a text prompt using OpenAI GPT Image via KIE.ai. Saves the result to storage and returns a download link plus a storage key.",
         inputSchema: generateImageSchema,
       },
       async (args) => {
         try {
           return toToolResult(await generateImage(args));
         } catch (error) {
-          return toErrorResult(error);
+          return toErrorResult(error, "Image generation failed.");
         }
       },
     );
@@ -64,14 +80,40 @@ const mcpHandler = createMcpHandler(
       {
         title: "Edit image (GPT Image)",
         description:
-          "Edit or restyle existing image(s) from public URL(s) with a text instruction. Pass a previous result URL to iterate on the same image.",
+          "Edit or restyle existing image(s) from URL(s) with a text instruction. To iterate on a previous result, pass its link (call get_media_url first if the link has expired).",
         inputSchema: editImageSchema,
       },
       async (args) => {
         try {
           return toToolResult(await editImage(args));
         } catch (error) {
-          return toErrorResult(error);
+          return toErrorResult(error, "Image generation failed.");
+        }
+      },
+    );
+
+    server.registerTool(
+      "get_media_url",
+      {
+        title: "Get a fresh link for stored media",
+        description:
+          "Return a new time-limited download link (valid 7 days) for a file saved by generate_image or edit_image, identified by its storage key.",
+        inputSchema: getMediaUrlSchema,
+      },
+      async (args) => {
+        try {
+          const item = await getMediaUrl(args);
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `${item.url}\nKey ${item.key}; link valid ${linkDays(item)} days.`,
+              },
+            ],
+          };
+        } catch (error) {
+          return toErrorResult(error, "Could not get a media link.");
         }
       },
     );

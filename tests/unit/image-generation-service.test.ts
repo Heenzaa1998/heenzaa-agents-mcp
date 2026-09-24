@@ -8,8 +8,12 @@ const storedItem = {
   expiresInSeconds: 604800,
 };
 
+function makeHistory() {
+  return { record: vi.fn().mockResolvedValue(undefined) };
+}
+
 describe("generateImage", () => {
-  it("maps parsed input onto the KIE client and persists the result", async () => {
+  it("maps parsed input onto the KIE client, persists and records the result", async () => {
     const client = {
       generateImage: vi.fn().mockResolvedValue({
         taskId: "task_1",
@@ -17,11 +21,13 @@ describe("generateImage", () => {
       }),
     };
     const persist = vi.fn().mockResolvedValue([storedItem]);
+    const history = makeHistory();
 
     const result = await generateImage(
       { prompt: "  a cat  ", aspect_ratio: "16:9", resolution: "2K" },
       client,
       persist,
+      history,
     );
 
     expect(client.generateImage).toHaveBeenCalledWith({
@@ -34,10 +40,19 @@ describe("generateImage", () => {
       prefix: "images",
       taskId: "task_1",
     });
+    expect(history.record).toHaveBeenCalledWith({
+      kind: "image",
+      operation: "generate_image",
+      model: "gpt-image-2-text-to-image",
+      prompt: "a cat",
+      status: "success",
+      taskId: "task_1",
+      media: [{ key: "images/task_1-1.png" }],
+    });
     expect(result).toEqual({ taskId: "task_1", media: [storedItem] });
   });
 
-  it("propagates a client failure as an AppError without persisting", async () => {
+  it("records the failure and rethrows without persisting", async () => {
     const client = {
       generateImage: vi
         .fn()
@@ -46,16 +61,24 @@ describe("generateImage", () => {
         ),
     };
     const persist = vi.fn();
+    const history = makeHistory();
 
     await expect(
-      generateImage({ prompt: "x" }, client, persist),
+      generateImage({ prompt: "x" }, client, persist, history),
     ).rejects.toMatchObject({ code: "kie_http_error", statusCode: 502 });
     expect(persist).not.toHaveBeenCalled();
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "fail",
+        taskId: null,
+        error: "kie_http_error: boom",
+      }),
+    );
   });
 });
 
 describe("editImage", () => {
-  it("maps image_urls onto the client editImage call and persists the result", async () => {
+  it("maps image_urls onto the client, persists and records the result", async () => {
     const client = {
       editImage: vi.fn().mockResolvedValue({
         taskId: "task_2",
@@ -63,6 +86,7 @@ describe("editImage", () => {
       }),
     };
     const persist = vi.fn().mockResolvedValue([storedItem]);
+    const history = makeHistory();
 
     const result = await editImage(
       {
@@ -72,6 +96,7 @@ describe("editImage", () => {
       },
       client,
       persist,
+      history,
     );
 
     expect(client.editImage).toHaveBeenCalledWith({
@@ -84,6 +109,14 @@ describe("editImage", () => {
       prefix: "images",
       taskId: "task_2",
     });
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "edit_image",
+        model: "gpt-image/1.5-image-to-image",
+        status: "success",
+        taskId: "task_2",
+      }),
+    );
     expect(result.media).toEqual([storedItem]);
   });
 });

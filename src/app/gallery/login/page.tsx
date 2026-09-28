@@ -1,20 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { Lock } from "lucide-react";
 import { GalleryLoginForm } from "@/components/gallery-login-form";
-import { PageShell } from "@/components/page-shell";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { hasGallerySession, isGalleryEnabled } from "@/server/auth/gallery-session";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Gallery sign in",
+  title: "Sign in",
   robots: { index: false, follow: false },
 };
 
@@ -23,23 +16,26 @@ export default async function GalleryLoginPage() {
     redirect("/gallery");
   }
 
+  const enabled = isGalleryEnabled();
+
   return (
-    <PageShell className="items-center py-16">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Private gallery</CardTitle>
-          <CardDescription>
-            {isGalleryEnabled()
-              ? "Enter the gallery password to see your generated images and videos."
-              : "The gallery is closed: GALLERY_PASSWORD is not set on this server."}
-          </CardDescription>
-        </CardHeader>
-        {isGalleryEnabled() ? (
-          <CardContent>
-            <GalleryLoginForm />
-          </CardContent>
-        ) : null}
-      </Card>
-    </PageShell>
+    <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-16">
+      <div className="flex w-full max-w-sm flex-col gap-6 rounded-2xl border border-border bg-card p-8">
+        <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Lock className="size-4" />
+        </span>
+        <div className="flex flex-col gap-2">
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            The gallery is private
+          </h1>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {enabled
+              ? "Enter the gallery password to see your images and videos."
+              : "It is closed on this server until GALLERY_PASSWORD is set."}
+          </p>
+        </div>
+        {enabled ? <GalleryLoginForm /> : null}
+      </div>
+    </main>
   );
 }

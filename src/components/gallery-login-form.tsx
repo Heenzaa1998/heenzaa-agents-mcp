@@ -11,12 +11,14 @@ export function GalleryLoginForm() {
   const [state, formAction, isPending] = useActionState(login, initialState);
 
   return (
-    <form action={formAction} className="grid gap-4">
-      <div className="grid gap-2">
-        <label className="text-sm font-semibold text-foreground" htmlFor="gallery-password">
+    <form action={formAction} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-medium text-muted-foreground" htmlFor="gallery-password">
           Password
         </label>
         <Input
+          aria-describedby="gallery-password-error"
+          aria-invalid={state.error ? true : undefined}
           autoComplete="current-password"
           autoFocus
           disabled={isPending}
@@ -28,12 +30,13 @@ export function GalleryLoginForm() {
       </div>
 
       <Button disabled={isPending} type="submit">
-        {isPending ? "Checking..." : "Open gallery"}
+        {isPending ? "Checking…" : "Open gallery"}
       </Button>
 
       <p
         aria-live="polite"
-        className="min-h-6 text-sm leading-6 text-[color:var(--destructive)]"
+        className="min-h-5 text-sm text-destructive"
+        id="gallery-password-error"
       >
         {state.error}
       </p>

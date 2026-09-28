@@ -26,7 +26,7 @@ Optimize for maintainability. Keep the codebase shallow, explicit, and easy to o
 - Preserve the current architecture before adding new folders or patterns.
 - Keep route handlers and pages thin.
 - Put business logic in features, infra in `src/server`, and UI in `src/components`.
-- If a change affects routes, UI copy, or docs-like pages, keep `Overview`, `Guide`, and `Operations` consistent.
+- If a change affects routes or UI copy, keep the home page (`/`) and `src/content/site.ts` in step with it.
 
 ## Workflow Rules
 
@@ -79,7 +79,7 @@ See `docs/README.md` for the full conventions.
 src/
   app/               pages, layouts, route handlers
   components/        reusable UI and site shell components
-  content/           static content for the docs-style pages
+  content/           product copy: brand name, tools, pipeline, connect steps
   features/          feature contracts, services, repositories
   server/            env, logging, db, tracing, metrics, http helpers
 .claude/             agent settings, hooks, and the add-feature skill
@@ -106,12 +106,19 @@ tests/
 
 ## UI Rules
 
-- The site already has a clear visual direction. Extend it instead of resetting it to generic defaults.
-- Reuse the shared shell components:
-  `src/components/site-header.tsx`, `src/components/site-footer.tsx`, `src/components/page-shell.tsx`, `src/components/page-hero.tsx`
-- Prefer updating `src/content/site.ts` for shared copy/data before hardcoding repeated text in pages.
-- Keep the three public pages coherent:
-  `/`, `/guide`, `/operations`
+- The site is the product "Heenzaa Studio" with a dark studio theme. The starter template's
+  look is gone on purpose; do not bring it back.
+- Colours come only from the tokens in `src/app/globals.css`. One accent (lime `--primary`)
+  is reserved for primary actions and active state, so generated media carries the colour.
+  Status colours are `success`, `warning` and `destructive`.
+- Type: `font-display` (Space Grotesk) for headings, the default sans (Inter) for text,
+  `font-mono` (JetBrains Mono) for tool names, keys and endpoints.
+- Keep base styles inside `@layer base`. Unlayered CSS outranks every Tailwind utility.
+- Reuse `src/components/site-header.tsx`, `site-footer.tsx`, `copy-button.tsx` and the
+  primitives in `src/components/ui/` before adding new components.
+- Keep the brand name and shared copy in `src/content/site.ts`, not hardcoded in pages.
+- Public pages (`/`) must never show the owner's generations; anything private lives
+  behind the gallery session (`/gallery`).
 - The project uses `typedRoutes`. When passing href values from data objects into `next/link`, use `Route` typing/casts where needed.
 
 ## Observability Rules
@@ -184,7 +191,7 @@ Use these expectations:
 
 - Unit tests cover page rendering, feature logic, contracts, and trace-path behavior.
 - E2E tests cover:
-  home page, guide page, operations page, subscriber flow, `/api/health`, `/metrics`
+  home page, gallery sign-in redirect, `/api/health`, `/metrics`
 - If you add a new user-visible route or significantly change copy/structure, update tests accordingly.
 
 ## Skills

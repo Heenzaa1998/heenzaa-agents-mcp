@@ -1,18 +1,25 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink, ImageIcon, LogOut, RefreshCw, Video } from "lucide-react";
+import {
+  AlertTriangle,
+  ExternalLink,
+  Film,
+  ImageIcon,
+  Loader2,
+  LogOut,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import { checkTask, logout } from "@/app/gallery/actions";
-import { PageShell } from "@/components/page-shell";
-import { Badge } from "@/components/ui/badge";
+import { CopyButton } from "@/components/copy-button";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   galleryFiltersFrom,
   listGalleryItems,
+  type GalleryFilters,
   type GalleryItem,
-  type GalleryMedia,
 } from "@/features/gallery/service";
 import { hasGallerySession, isGalleryEnabled } from "@/server/auth/gallery-session";
 import { cn } from "@/lib/utils";
@@ -28,23 +35,85 @@ type GalleryPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const statusClassNames = {
-  fail: "border-transparent bg-[color:var(--destructive)]/10 text-[color:var(--destructive)]",
-  pending: "border-transparent bg-amber-500/15 text-amber-800",
-  success: "border-transparent bg-emerald-600/10 text-emerald-800",
-} as const;
+const kindOptions = [
+  { label: "All", value: undefined },
+  { label: "Images", value: "image" },
+  { label: "Videos", value: "video" },
+] as const;
 
-const selectClassName =
-  "h-11 rounded-2xl border border-input/70 bg-background/80 px-4 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40";
+const statusOptions = [
+  { label: "Any status", value: undefined },
+  { label: "Done", value: "success" },
+  { label: "Generating", value: "pending" },
+  { label: "Failed", value: "fail" },
+] as const;
 
-function MediaPreview({ item, media }: { item: GalleryItem; media: GalleryMedia | undefined }) {
+function galleryHref(filters: GalleryFilters, change: Partial<GalleryFilters>) {
+  const next = { ...filters, ...change };
+  const params = new URLSearchParams();
+
+  if (next.kind) params.set("kind", next.kind);
+  if (next.status) params.set("status", next.status);
+  if (next.query) params.set("q", next.query);
+
+  const query = params.toString();
+
+  return (query ? `/gallery?${query}` : "/gallery") as Route;
+}
+
+function Segmented<T extends string | undefined>({
+  current,
+  label,
+  options,
+  toHref,
+}: {
+  current: T;
+  label: string;
+  options: readonly { label: string; value: T }[];
+  toHref: (value: T) => Route;
+}) {
+  return (
+    <nav aria-label={label} className="flex rounded-lg border border-border bg-card p-0.5">
+      {options.map((option) => {
+        const active = option.value === current;
+
+        return (
+          <Link
+            aria-current={active ? "true" : undefined}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              active
+                ? "bg-secondary text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            href={toHref(option.value)}
+            key={option.label}
+          >
+            {option.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function MediaTile({ item }: { item: GalleryItem }) {
+  const media = item.media[0];
+
   if (!media?.url) {
-    const Icon = item.kind === "video" ? Video : ImageIcon;
+    const pending = item.status === "pending";
+    const failed = item.status === "fail";
 
     return (
-      <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-secondary/60 text-sm text-muted-foreground">
-        <Icon className="size-6" />
-        {item.status === "pending" ? "Still generating" : "No file"}
+      <div className="flex aspect-square w-full flex-col items-center justify-center gap-3 bg-[repeating-linear-gradient(135deg,var(--muted)_0_10px,var(--card)_10px_20px)] px-6 text-center text-xs text-muted-foreground">
+        {pending ? (
+          <Loader2 className="size-5 animate-spin text-warning" />
+        ) : failed ? (
+          <AlertTriangle className="size-5 text-destructive" />
+        ) : (
+          <ImageIcon className="size-5" />
+        )}
+        {pending ? "Still generating" : failed ? "Generation failed" : "No file"}
       </div>
     );
   }
@@ -52,7 +121,7 @@ function MediaPreview({ item, media }: { item: GalleryItem; media: GalleryMedia 
   if (item.kind === "video") {
     return (
       <video
-        className="aspect-square w-full bg-foreground object-contain"
+        className="aspect-square w-full bg-black object-contain"
         controls
         playsInline
         preload="metadata"
@@ -62,11 +131,17 @@ function MediaPreview({ item, media }: { item: GalleryItem; media: GalleryMedia 
   }
 
   return (
-    <a href={media.url} rel="noreferrer" target="_blank">
+    <a
+      className="group block overflow-hidden bg-muted"
+      href={media.url}
+      rel="noreferrer"
+      target="_blank"
+    >
       {/* eslint-disable-next-line @next/next/no-img-element -- presigned links change on every render, so the image optimizer would refetch every file */}
       <img
         alt={item.prompt}
-        className="aspect-square w-full object-cover"
+        className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+        decoding="async"
         loading="lazy"
         src={media.url}
       />
@@ -74,65 +149,85 @@ function MediaPreview({ item, media }: { item: GalleryItem; media: GalleryMedia 
   );
 }
 
+const statusStyles = {
+  fail: "bg-destructive/15 text-destructive",
+  pending: "bg-warning/15 text-warning",
+  success: "bg-success/15 text-success",
+} as const;
+
+const statusLabels = { fail: "Failed", pending: "Generating", success: "Done" } as const;
+
 function GalleryCard({ item }: { item: GalleryItem }) {
-  const [primary, ...more] = item.media;
+  const media = item.media[0];
+  const Icon = item.kind === "video" ? Film : ImageIcon;
 
   return (
-    <Card className="overflow-hidden p-0">
-      <MediaPreview item={item} media={primary} />
-      <CardContent className="grid gap-3 p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{item.kind}</Badge>
-          <Badge className={statusClassNames[item.status]}>{item.status}</Badge>
-          <span className="text-xs text-muted-foreground">
-            {item.createdAt.slice(0, 16)} UTC
-          </span>
-        </div>
+    <article className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
+      <div className="relative">
+        <MediaTile item={item} />
+        <span className="pointer-events-none absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">
+          <Icon className="size-3" />
+          {item.kind === "video" ? "Video" : "Image"}
+        </span>
+      </div>
 
-        <p className="line-clamp-4 text-sm leading-6 text-foreground">{item.prompt}</p>
-
-        {item.media.map((media, index) =>
-          media.key ? (
-            <code className="break-all text-xs text-muted-foreground" key={media.key}>
-              {media.key}
-            </code>
-          ) : (
-            <span className="text-xs text-muted-foreground" key={`unstored-${index}`}>
-              Not saved to storage
-            </span>
-          ),
-        )}
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <p className="line-clamp-3 text-sm leading-6" title={item.prompt}>
+          {item.prompt}
+        </p>
 
         {item.error ? (
-          <p className="text-xs leading-5 text-[color:var(--destructive)]">{item.error}</p>
+          <p className="line-clamp-2 text-xs leading-5 text-destructive" title={item.error}>
+            {item.error}
+          </p>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          {primary?.url ? (
-            <Button asChild size="sm" variant="outline">
-              <a href={primary.url} rel="noreferrer" target="_blank">
-                Open
-                <ExternalLink className="size-4" />
-              </a>
-            </Button>
-          ) : null}
-          {more.length > 0 ? (
-            <span className="self-center text-xs text-muted-foreground">
-              +{more.length} more
+        <div className="mt-auto flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span className={cn("rounded-md px-1.5 py-0.5 font-medium", statusStyles[item.status])}>
+            {statusLabels[item.status]}
+          </span>
+          <span className="font-mono">{item.createdAt.slice(0, 16)} UTC</span>
+        </div>
+
+        <div className="flex items-center gap-1 border-t border-border pt-3">
+          {media?.key ? (
+            <>
+              <code className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                {media.key}
+              </code>
+              <CopyButton label="Copy storage key" value={media.key} />
+            </>
+          ) : (
+            <span className="flex-1 text-[11px] text-muted-foreground">
+              {item.status === "pending" && item.taskId ? item.taskId : "Not in storage"}
             </span>
+          )}
+
+          {media?.url ? (
+            <a
+              aria-label="Open file"
+              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              href={media.url}
+              rel="noreferrer"
+              target="_blank"
+              title="Open file"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
           ) : null}
+
           {item.status === "pending" && item.taskId ? (
             <form action={checkTask}>
               <input name="taskId" type="hidden" value={item.taskId} />
               <Button size="sm" type="submit" variant="secondary">
-                <RefreshCw className="size-4" />
-                Check status
+                <RefreshCw />
+                Check
               </Button>
             </form>
           ) : null}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }
 
@@ -146,72 +241,78 @@ export default async function GalleryPage({ searchParams }: GalleryPageProps) {
   const isFiltered = Boolean(filters.kind || filters.status || filters.query);
 
   return (
-    <PageShell>
-      <section className="flex flex-col gap-5 rounded-[2rem] border border-border/70 bg-card/88 p-7 shadow-[0_28px_80px_rgba(111,63,20,0.16)] md:flex-row md:items-end md:justify-between">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-primary/80">
-            Private gallery
-          </p>
-          <h1 className="text-4xl font-semibold tracking-[-0.06em] text-foreground">
-            Your generations
-          </h1>
+    <main className="mx-auto flex max-w-7xl flex-col gap-8 px-4 pb-24 pt-10 sm:px-6 lg:px-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-display text-4xl font-semibold tracking-[-0.03em]">Gallery</h1>
           <p className="text-sm text-muted-foreground">
-            Newest first, up to 30 at a time. Links on this page last one hour.
+            {items.length === 0
+              ? "Nothing here yet."
+              : `${items.length} ${items.length === 1 ? "item" : "items"}, newest first. Links on this page last an hour.`}
           </p>
         </div>
         <form action={logout}>
-          <Button size="sm" type="submit" variant="outline">
-            <LogOut className="size-4" />
+          <Button size="sm" type="submit" variant="ghost">
+            <LogOut />
             Sign out
           </Button>
         </form>
-      </section>
+      </div>
 
-      <form className="flex flex-wrap items-end gap-3" method="get">
-        <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-          Type
-          <select className={selectClassName} defaultValue={filters.kind ?? ""} name="kind">
-            <option value="">All</option>
-            <option value="image">Images</option>
-            <option value="video">Videos</option>
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-          Status
-          <select className={selectClassName} defaultValue={filters.status ?? ""} name="status">
-            <option value="">All</option>
-            <option value="success">Done</option>
-            <option value="pending">Generating</option>
-            <option value="fail">Failed</option>
-          </select>
-        </label>
-        <label className="grid min-w-56 flex-1 gap-1 text-xs font-semibold text-muted-foreground">
-          Prompt contains
-          <Input defaultValue={filters.query ?? ""} name="q" placeholder="cat, poster..." />
-        </label>
-        <Button type="submit">Filter</Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          current={filters.kind}
+          label="Filter by type"
+          options={kindOptions}
+          toHref={(kind) => galleryHref(filters, { kind })}
+        />
+        <Segmented
+          current={filters.status}
+          label="Filter by status"
+          options={statusOptions}
+          toHref={(status) => galleryHref(filters, { status })}
+        />
+        <form className="relative min-w-56 flex-1" method="get" role="search">
+          {filters.kind ? <input name="kind" type="hidden" value={filters.kind} /> : null}
+          {filters.status ? <input name="status" type="hidden" value={filters.status} /> : null}
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Search prompts"
+            className="h-9 pl-9"
+            defaultValue={filters.query ?? ""}
+            name="q"
+            placeholder="Search prompts"
+          />
+        </form>
         {isFiltered ? (
-          <Button asChild variant="ghost">
-            <Link href={"/gallery" as Route}>Clear</Link>
-          </Button>
+          <Link
+            className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            href={"/gallery" as Route}
+          >
+            Clear filters
+          </Link>
         ) : null}
-      </form>
+      </div>
 
       {items.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-20 text-center">
+          <ImageIcon className="size-6 text-muted-foreground" />
+          <p className="font-display text-lg font-semibold">
+            {isFiltered ? "Nothing matches these filters" : "Your gallery is empty"}
+          </p>
+          <p className="max-w-sm text-sm text-muted-foreground">
             {isFiltered
-              ? "Nothing matches these filters."
-              : "No generations yet. Ask Claude to create an image or a video through the MCP connector."}
-          </CardContent>
-        </Card>
+              ? "Try another type, status or search."
+              : "Ask Claude for an image or a video with the connector on, and it will appear here."}
+          </p>
+        </div>
       ) : (
-        <div className={cn("grid gap-5 sm:grid-cols-2 lg:grid-cols-3")}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {items.map((item) => (
             <GalleryCard item={item} key={item.id} />
           ))}
         </div>
       )}
-    </PageShell>
+    </main>
   );
 }

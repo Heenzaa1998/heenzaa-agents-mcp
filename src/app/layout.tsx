@@ -1,15 +1,26 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { brand } from "@/content/site";
 import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+});
 
 export const metadata: Metadata = {
   title: {
-    default: "Next.js Drizzle Template",
-    template: "%s | Next.js Drizzle Template",
+    default: brand.name,
+    template: `%s · ${brand.name}`,
   },
-  description:
-    "Lean production-ready template with Tailwind, shadcn/ui, Drizzle, metrics, and OpenTelemetry tracing.",
+  description: brand.tagline,
 };
 
 export default function RootLayout({
@@ -18,7 +29,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html
+      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+      lang="en"
+    >
       <body className="min-h-screen antialiased">
         <div className="relative flex min-h-screen flex-col">
           <SiteHeader />

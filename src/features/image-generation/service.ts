@@ -16,7 +16,9 @@ import {
 import {
   IMAGE_TO_IMAGE_MODEL,
   kieClient,
+  LEGACY_IMAGE_TO_IMAGE_MODEL,
   TEXT_TO_IMAGE_MODEL,
+  type EditImageParams,
   type KieClient,
 } from "@/server/kie/client";
 import { logger } from "@/server/logger";
@@ -132,27 +134,41 @@ export async function editImage(
     },
     async (span) => {
       const parsed = editImageSchema.parse(input);
+      const legacy = parsed.model === "gpt-image-1.5";
       const entry = {
         kind: "image" as const,
         operation: "edit_image",
-        model: IMAGE_TO_IMAGE_MODEL,
+        model: legacy ? LEGACY_IMAGE_TO_IMAGE_MODEL : IMAGE_TO_IMAGE_MODEL,
         prompt: parsed.prompt,
         project: parsed.project,
         shot: parsed.shot,
       };
 
-      span.setAttribute("app.image.aspect_ratio", parsed.aspect_ratio);
+      const shared = { prompt: parsed.prompt, imageUrls: parsed.image_urls };
+      const params: EditImageParams = legacy
+        ? {
+            ...shared,
+            model: "gpt-image-1.5",
+            // The older model has no auto ratio; 3:2 was its default.
+            aspectRatio: parsed.aspect_ratio === "auto" ? "3:2" : parsed.aspect_ratio,
+            quality: parsed.quality ?? "medium",
+          }
+        : {
+            ...shared,
+            model: "gpt-image-2",
+            aspectRatio: parsed.aspect_ratio,
+            resolution: parsed.resolution,
+            background: parsed.background,
+          };
+
+      span.setAttribute("app.image.model", parsed.model);
+      span.setAttribute("app.image.aspect_ratio", params.aspectRatio);
       span.setAttribute("app.image.input_count", parsed.image_urls.length);
 
       let result;
 
       try {
-        result = await client.editImage({
-          prompt: parsed.prompt,
-          imageUrls: parsed.image_urls,
-          aspectRatio: parsed.aspect_ratio,
-          quality: parsed.quality,
-        });
+        result = await client.editImage(params);
       } catch (error) {
         await history.record({
           ...entry,

@@ -83,3 +83,10 @@ test("exposes Prometheus metrics", async ({ request }) => {
   expect(response.headers()["content-type"]).toContain("text/plain");
   expect(await response.text()).toContain("nextjs_drizzle_http_requests_total");
 });
+
+test("sends visitors without a session to the gallery sign-in page", async ({ page }) => {
+  await page.goto("/gallery");
+
+  await expect(page).toHaveURL(/\/gallery\/login$/);
+  await expect(page.getByText("Private gallery", { exact: true })).toBeVisible();
+});

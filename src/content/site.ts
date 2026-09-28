@@ -19,6 +19,11 @@ export const navigationItems = [
     label: "Operations",
     summary: "Runbook for health checks, metrics, logs, and tracing in production.",
   },
+  {
+    href: "/gallery",
+    label: "Gallery",
+    summary: "Password-protected view of generated images and videos.",
+  },
 ] as const;
 
 export const stackItems = [
@@ -174,6 +179,12 @@ export const liveRoutes = [
     method: "GET",
     path: "/metrics",
     summary: "Metrics exposition for route counters, process metrics, and database timings.",
+  },
+  {
+    audience: "Owner (password)",
+    method: "GET",
+    path: "/gallery",
+    summary: "Private gallery of generations with filters and video status checks.",
   },
   {
     audience: "Feature smoke tests",

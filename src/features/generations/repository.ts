@@ -5,7 +5,11 @@ import type {
   NewGeneration,
 } from "@/features/generations/contracts";
 import { db } from "@/server/db/client";
-import { generations, type GenerationRecord } from "@/server/db/schema";
+import {
+  generations,
+  type GenerationRecord,
+  type StoredMediaRef,
+} from "@/server/db/schema";
 import { withDatabaseSpan } from "@/server/observability/tracing";
 
 export type GenerationRepository = {
@@ -13,6 +17,7 @@ export type GenerationRepository = {
   // Returns how many rows were updated (0 when the task was never recorded).
   finishByTaskId: (taskId: string, outcome: GenerationOutcome) => Promise<number>;
   list: (filters: ListGenerationsInput) => Promise<GenerationRecord[]>;
+  updateMedia: (id: number, media: StoredMediaRef[]) => Promise<void>;
 };
 
 // ILIKE treats % and _ as wildcards; escape them so a search is literal.
@@ -98,6 +103,25 @@ export const generationRepository: GenerationRepository = {
         span.setAttribute("app.generations.found", records.length);
 
         return records;
+      },
+    );
+  },
+
+  async updateMedia(id, media) {
+    return withDatabaseSpan(
+      {
+        operation: "UPDATE",
+        summary: "Replace the stored media references of a generation.",
+        table: "generations",
+      },
+      async (span) => {
+        const updated = await db
+          .update(generations)
+          .set({ media, updatedAt: sql`now()` })
+          .where(eq(generations.id, id))
+          .returning({ id: generations.id });
+
+        span.setAttribute("app.generations.updated", updated.length);
       },
     );
   },

@@ -15,7 +15,11 @@ export type R2Config = {
 
 export type MediaStore = {
   enabled: boolean;
-  put: (key: string, body: ArrayBuffer, contentType: string) => Promise<void>;
+  put: (
+    key: string,
+    body: ArrayBuffer | Uint8Array<ArrayBuffer>,
+    contentType: string,
+  ) => Promise<void>;
   exists: (key: string) => Promise<boolean>;
   presign: (key: string, ttlSeconds?: number) => Promise<string>;
 };

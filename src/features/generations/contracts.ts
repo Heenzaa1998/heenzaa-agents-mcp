@@ -6,6 +6,7 @@ export const GENERATION_STATUSES = ["pending", "success", "fail"] as const;
 export const storedMediaRefSchema = z.object({
   key: z.string().nullable(),
   url: z.string().optional(),
+  thumbKey: z.string().optional(),
 });
 
 export const newGenerationSchema = z.object({

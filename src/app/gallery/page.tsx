@@ -1,6 +1,7 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import {
   AlertTriangle,
   ExternalLink,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Dictionary, Locale } from "@/content/i18n";
 import {
+  backfillThumbnails,
   galleryFiltersFrom,
   listGalleryItems,
   type GalleryFilters,
@@ -195,7 +197,7 @@ function GalleryCard({
             className="block h-auto w-full transition-transform duration-700 group-hover:scale-[1.03]"
             decoding="async"
             loading="lazy"
-            src={media.url}
+            src={media.thumbUrl ?? media.url}
           />
         </a>
         {badges}
@@ -267,7 +269,12 @@ export default async function GalleryPage({ searchParams }: GalleryPageProps) {
   const [{ dict, locale }, params] = await Promise.all([getDictionary(), searchParams]);
   const text = dict.gallery;
   const filters = galleryFiltersFrom(params);
-  const items = await listGalleryItems(filters);
+  const { items, needsThumbnails } = await listGalleryItems(filters);
+
+  if (needsThumbnails.length > 0) {
+    // Fill in missing previews once the page has been sent.
+    after(() => backfillThumbnails(needsThumbnails));
+  }
   const isFiltered = Boolean(filters.kind || filters.status || filters.query);
 
   const kindOptions = [

@@ -29,7 +29,9 @@ export type GenerationLog = {
 
 export function toMediaRefs(media: MediaItem[]): StoredMediaRef[] {
   return media.map((item) =>
-    item.key ? { key: item.key } : { key: null, url: item.url },
+    item.key
+      ? { key: item.key, ...(item.thumbKey ? { thumbKey: item.thumbKey } : {}) }
+      : { key: null, url: item.url },
   );
 }
 

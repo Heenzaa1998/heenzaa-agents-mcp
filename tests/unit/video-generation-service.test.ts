@@ -21,7 +21,7 @@ describe("startVideo", () => {
         prompt: "@khing runs past the table",
         image_url: "https://example.com/first.png",
         duration: "4",
-        elements: [{ name: "khing", description: "tuxedo kitten", image_urls: ["https://example.com/k.png"] }],
+        elements: [{ name: "khing", description: "tuxedo kitten", image_urls: ["https://example.com/k.png", "https://example.com/k-face.png"] }],
         project: "EP",
         shot: "S08",
       },
@@ -38,7 +38,7 @@ describe("startVideo", () => {
       sound: false,
       mode: "std",
       endImageUrl: undefined,
-      elements: [{ name: "khing", description: "tuxedo kitten", imageUrls: ["https://example.com/k.png"] }],
+      elements: [{ name: "khing", description: "tuxedo kitten", imageUrls: ["https://example.com/k.png", "https://example.com/k-face.png"] }],
     });
     expect(history.record).toHaveBeenCalledWith(
       expect.objectContaining({ model: "kling-3.0/video", status: "pending", durationSeconds: 4, shot: "S08" }),

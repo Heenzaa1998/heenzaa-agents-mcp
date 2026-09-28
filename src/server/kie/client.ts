@@ -155,7 +155,10 @@ async function createTask(
   const taskId = (payload.data as { taskId?: string } | undefined)?.taskId;
 
   if (!taskId) {
-    throw new AppError("KIE createTask did not return a taskId.", {
+    // KIE answers HTTP 200 with its own code/msg for rejected input (e.g. 422).
+    const reason = payload.msg ? ` ${payload.code ?? ""} ${payload.msg}`.trimEnd() : "";
+
+    throw new AppError(`KIE createTask did not return a taskId.${reason}`, {
       code: "kie_create_failed",
       statusCode: 502,
     });

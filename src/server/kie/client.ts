@@ -14,6 +14,8 @@ export const IMAGE_TO_IMAGE_MODEL = "gpt-image-2-image-to-image";
 export const LEGACY_IMAGE_TO_IMAGE_MODEL = "gpt-image/1.5-image-to-image";
 export const TEXT_TO_VIDEO_MODEL = "kling-2.6/text-to-video";
 export const IMAGE_TO_VIDEO_MODEL = "kling-2.6/image-to-video";
+// Kling 3.0 is one model for both text- and image-to-video.
+export const KLING_3_MODEL = "kling-3.0/video";
 
 const POLL_TIMEOUT_MS = 240_000;
 const POLL_INTERVAL_MS = 3_000;
@@ -40,14 +42,31 @@ export type EditImageParams = {
   | { model: "gpt-image-1.5"; quality: string }
 );
 
+export type VideoElement = {
+  name: string;
+  description: string;
+  imageUrls: string[];
+};
+
 export type StartVideoParams = {
+  model: "kling-3.0" | "kling-2.6";
   prompt: string;
   // When set, the clip animates this image and takes its aspect ratio.
   imageUrl?: string;
   aspectRatio: string;
   duration: string;
   sound: boolean;
+  // Kling 3.0 only.
+  endImageUrl?: string;
+  mode?: string;
+  elements?: VideoElement[];
 };
+
+// KIE model id for a request; exported so failures can be recorded with it.
+export function videoModelFor(params: Pick<StartVideoParams, "model" | "imageUrl">) {
+  if (params.model === "kling-3.0") return KLING_3_MODEL;
+  return params.imageUrl ? IMAGE_TO_VIDEO_MODEL : TEXT_TO_VIDEO_MODEL;
+}
 
 export type KieTaskStatus = {
   taskId: string;
@@ -345,7 +364,7 @@ export const kieClient: KieClient = {
   // Video takes minutes, so this only creates the task; callers check on it
   // later with getTask instead of holding the request open.
   startVideo(params) {
-    const model = params.imageUrl ? IMAGE_TO_VIDEO_MODEL : TEXT_TO_VIDEO_MODEL;
+    const model = videoModelFor(params);
 
     return withSpan(
       "kie.start_video",
@@ -364,9 +383,22 @@ export const kieClient: KieClient = {
         };
 
         if (params.imageUrl) {
-          input.image_urls = [params.imageUrl];
+          input.image_urls = [params.imageUrl, ...(params.endImageUrl ? [params.endImageUrl] : [])];
         } else {
           input.aspect_ratio = params.aspectRatio;
+        }
+
+        if (params.model === "kling-3.0") {
+          input.mode = params.mode ?? "std";
+          input.multi_shots = false;
+
+          if (params.elements?.length) {
+            input.kling_elements = params.elements.map((element) => ({
+              name: element.name,
+              description: element.description,
+              element_input_urls: element.imageUrls,
+            }));
+          }
         }
 
         const taskId = await createTask(requireApiKey(), model, input);

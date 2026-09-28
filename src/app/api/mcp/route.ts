@@ -165,9 +165,9 @@ const mcpHandler = createMcpHandler(
     server.registerTool(
       "generate_video",
       {
-        title: "Generate video (Kling 2.6)",
+        title: "Generate video (Kling 3.0 / 2.6)",
         description:
-          "Start a video from a text prompt, or animate an image by passing image_url. Returns a task_id immediately; video takes minutes, so call get_task_status with it to get the result.",
+          "Start a video from a text prompt, or animate an image by passing image_url (first frame) and optionally end_image_url. Kling 3.0 (default) keeps characters consistent via elements (reference images, mentioned as @name in the prompt) and takes 3–15s; kling-2.6 is cheaper (5 or 10s). Returns a task_id immediately; video takes minutes, so call get_task_status with it to get the result.",
         inputSchema: generateVideoSchema,
       },
       async (args) => {

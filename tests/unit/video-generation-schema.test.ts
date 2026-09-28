@@ -8,8 +8,10 @@ describe("generateVideoSchema", () => {
   it("applies defaults to a text-only prompt", () => {
     expect(generateVideoSchema.parse({ prompt: "  waves at dusk  " })).toEqual({
       prompt: "waves at dusk",
+      model: "kling-3.0",
       aspect_ratio: "16:9",
       duration: "5",
+      mode: "std",
       sound: false,
     });
   });
@@ -25,12 +27,46 @@ describe("generateVideoSchema", () => {
     expect(parsed.duration).toBe("10");
   });
 
+  it("accepts Kling 3.0 elements, an end frame and any length from 3 to 15s", () => {
+    const parsed = generateVideoSchema.parse({
+      prompt: "@grandma sips tea while @dad sneaks a cookie",
+      image_url: "https://example.com/first.png",
+      end_image_url: "https://example.com/last.png",
+      duration: "4",
+      mode: "pro",
+      elements: [
+        { name: "grandma", description: "calico grandma cat", image_urls: ["https://example.com/g.png"] },
+        { name: "dad", description: "fluffy orange dad cat", image_urls: ["https://example.com/d.png"] },
+      ],
+    });
+
+    expect(parsed).toMatchObject({ model: "kling-3.0", duration: "4", mode: "pro" });
+    expect(parsed.elements).toHaveLength(2);
+  });
+
+  it("keeps kling-2.6 to its own options", () => {
+    expect(
+      generateVideoSchema.safeParse({ prompt: "x", model: "kling-2.6", duration: "10" }).success,
+    ).toBe(true);
+  });
+
   it.each([
     { prompt: "" },
     { prompt: "x".repeat(1001) },
-    { prompt: "x", duration: "7" },
+    { prompt: "x", duration: "2" },
+    { prompt: "x", duration: "16" },
     { prompt: "x", aspect_ratio: "4:3" },
     { prompt: "x", image_url: "not-a-url" },
+    { prompt: "x", end_image_url: "https://example.com/last.png" },
+    { prompt: "x", elements: [{ name: "cat", description: "a cat", image_urls: ["https://example.com/c.png"] }] },
+    { prompt: "@Cat", elements: [{ name: "Cat", description: "a cat", image_urls: ["https://example.com/c.png"] }] },
+    {
+      prompt: "@a @b @c @d",
+      elements: ["a", "b", "c", "d"].map((name) => ({ name, description: name, image_urls: ["https://example.com/x.png"] })),
+    },
+    { prompt: "x", model: "kling-2.6", duration: "7" },
+    { prompt: "x", model: "kling-2.6", mode: "pro" },
+    { prompt: "@cat", model: "kling-2.6", elements: [{ name: "cat", description: "a cat", image_urls: ["https://example.com/c.png"] }] },
   ])("rejects %o", (input) => {
     expect(generateVideoSchema.safeParse(input).success).toBe(false);
   });

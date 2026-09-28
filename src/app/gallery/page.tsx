@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ExternalLink,
   Film,
+  FolderOpen,
   ImageIcon,
   Loader2,
   LogOut,
@@ -13,6 +14,7 @@ import {
   Search,
 } from "lucide-react";
 import { checkTask, logout } from "@/app/gallery/actions";
+import { assignToProject } from "@/app/projects/actions";
 import { CopyButton } from "@/components/copy-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +26,14 @@ import {
   type GalleryFilters,
   type GalleryItem,
 } from "@/features/gallery/service";
+import {
+  backfillCosts,
+  getCreditRate,
+  toBaht,
+} from "@/features/projects/service";
+import { projectRepository } from "@/features/projects/repository";
 import { hasGallerySession, isGalleryEnabled } from "@/server/auth/gallery-session";
+import { formatBaht, formatCredits } from "@/lib/format";
 import { getDictionary } from "@/server/i18n";
 import { cn } from "@/lib/utils";
 
@@ -159,15 +168,62 @@ function Actions({ item, text, dict }: { item: GalleryItem; text: GalleryText; d
   );
 }
 
-function GalleryCard({
-  dict,
-  item,
-  locale,
-}: {
+type CardContext = {
   dict: Dictionary;
-  item: GalleryItem;
   locale: Locale;
-}) {
+  rate: number;
+  projectNames: Map<number, string>;
+};
+
+// Cost, project and shot, plus a small form to move the item into a project.
+function CardMeta({ item, context }: { item: GalleryItem; context: CardContext }) {
+  const { dict, locale, rate, projectNames } = context;
+  const text = dict.gallery;
+  const projectName = item.projectId ? projectNames.get(item.projectId) : undefined;
+
+  return (
+    <details className="group/meta border-t border-white/[0.06] text-[11px]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5 text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <span className={item.credits === null ? "text-warning/90" : "text-foreground"}>
+          {item.credits === null
+            ? text.costPending
+            : `${formatBaht(toBaht(item.credits, rate), locale)} · ${formatCredits(item.credits, locale)} ${text.credits}`}
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <FolderOpen className="size-3 shrink-0" />
+          <span className="truncate">
+            {projectName ? `${projectName}${item.shot ? ` · ${item.shot}` : ""}` : text.assign}
+          </span>
+        </span>
+      </summary>
+      <form action={assignToProject} className="flex flex-col gap-2 px-4 pb-4">
+        <input name="generationId" type="hidden" value={item.id} />
+        <Input
+          aria-label={text.projectPlaceholder}
+          className="h-9 rounded-lg text-xs"
+          defaultValue={projectName ?? ""}
+          list="project-names"
+          name="project"
+          placeholder={text.projectPlaceholder}
+        />
+        <Input
+          aria-label={text.shotPlaceholder}
+          className="h-9 rounded-lg text-xs"
+          defaultValue={item.shot ?? ""}
+          name="shot"
+          placeholder={text.shotPlaceholder}
+        />
+        <p className="text-[11px] leading-4 text-muted-foreground">{text.assignHelp}</p>
+        <Button size="sm" type="submit" variant="secondary">
+          {text.save}
+        </Button>
+      </form>
+    </details>
+  );
+}
+
+function GalleryCard({ item, context }: { item: GalleryItem; context: CardContext }) {
+  const { dict, locale } = context;
   const text = dict.gallery;
   const media = item.media[0];
   const KindIcon = item.kind === "video" ? Film : ImageIcon;
@@ -189,27 +245,30 @@ function GalleryCard({
   // Images: the picture fills the card and details appear over it on hover.
   if (item.kind === "image" && media?.url) {
     return (
-      <article className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-muted">
-        <a href={media.url} rel="noreferrer" target="_blank">
-          {/* eslint-disable-next-line @next/next/no-img-element -- presigned links change on every render, so the image optimizer would refetch every file */}
-          <img
-            alt={item.prompt}
-            className="block h-auto w-full transition-transform duration-700 group-hover:scale-[1.03]"
-            decoding="async"
-            loading="lazy"
-            src={media.thumbUrl ?? media.url}
-          />
-        </a>
-        {badges}
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pt-16 transition-opacity duration-300 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
-          <p className="line-clamp-3 text-sm leading-6 text-white" title={item.prompt}>
-            {item.prompt}
-          </p>
-          <div className="flex items-center justify-between gap-2 text-[11px] text-white/70">
-            <span>{when}</span>
-            <Actions dict={dict} item={item} text={text} />
+      <article className="group overflow-hidden rounded-2xl border border-white/[0.08] bg-card">
+        <div className="relative bg-muted">
+          <a href={media.url} rel="noreferrer" target="_blank">
+            {/* eslint-disable-next-line @next/next/no-img-element -- presigned links change on every render, so the image optimizer would refetch every file */}
+            <img
+              alt={item.prompt}
+              className="block h-auto w-full transition-transform duration-700 group-hover:scale-[1.03]"
+              decoding="async"
+              loading="lazy"
+              src={media.thumbUrl ?? media.url}
+            />
+          </a>
+          {badges}
+          <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pt-16 transition-opacity duration-300 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+            <p className="line-clamp-3 text-sm leading-6 text-white" title={item.prompt}>
+              {item.prompt}
+            </p>
+            <div className="flex items-center justify-between gap-2 text-[11px] text-white/70">
+              <span>{when}</span>
+              <Actions dict={dict} item={item} text={text} />
+            </div>
           </div>
         </div>
+        <CardMeta context={context} item={item} />
       </article>
     );
   }
@@ -257,6 +316,7 @@ function GalleryCard({
           </div>
         </div>
       </div>
+      <CardMeta context={context} item={item} />
     </article>
   );
 }
@@ -269,7 +329,21 @@ export default async function GalleryPage({ searchParams }: GalleryPageProps) {
   const [{ dict, locale }, params] = await Promise.all([getDictionary(), searchParams]);
   const text = dict.gallery;
   const filters = galleryFiltersFrom(params);
-  const { items, needsThumbnails } = await listGalleryItems(filters);
+  const [{ items, needsThumbnails }, rate, projects] = await Promise.all([
+    listGalleryItems(filters),
+    getCreditRate(),
+    projectRepository.list(),
+  ]);
+  const context: CardContext = {
+    dict,
+    locale,
+    rate,
+    projectNames: new Map(projects.map((project) => [project.id, project.name])),
+  };
+
+  if (items.some((item) => item.status === "success" && item.credits === null)) {
+    after(() => backfillCosts());
+  }
 
   if (needsThumbnails.length > 0) {
     // Fill in missing previews once the page has been sent.
@@ -343,6 +417,12 @@ export default async function GalleryPage({ searchParams }: GalleryPageProps) {
         ) : null}
       </div>
 
+      <datalist id="project-names">
+        {projects.map((project) => (
+          <option key={project.id} value={project.name} />
+        ))}
+      </datalist>
+
       {items.length === 0 ? (
         <div className="glass flex flex-col items-center gap-3 rounded-3xl px-6 py-24 text-center">
           <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
@@ -358,7 +438,7 @@ export default async function GalleryPage({ searchParams }: GalleryPageProps) {
       ) : (
         <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 [&>*]:mb-4 [&>*]:break-inside-avoid">
           {items.map((item) => (
-            <GalleryCard dict={dict} item={item} key={item.id} locale={locale} />
+            <GalleryCard context={context} item={item} key={item.id} />
           ))}
         </div>
       )}

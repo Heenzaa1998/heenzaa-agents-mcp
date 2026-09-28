@@ -8,6 +8,7 @@ export const MCP_ENDPOINT_PATH = "/api/mcp";
 export const navigationItems = [
   { href: "/", key: "studio" },
   { href: "/gallery", key: "gallery" },
+  { href: "/projects", key: "projects" },
 ] as const;
 
 export const toolNames = [

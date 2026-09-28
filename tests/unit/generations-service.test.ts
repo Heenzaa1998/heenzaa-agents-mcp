@@ -26,6 +26,10 @@ describe("recordGeneration", () => {
       prompt: "a cat",
       media: [],
       error: null,
+      credits: null,
+      durationSeconds: null,
+      projectId: null,
+      shot: null,
     });
   });
 

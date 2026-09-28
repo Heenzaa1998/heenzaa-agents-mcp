@@ -1,8 +1,11 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { env } from "@/server/env";
 
-export const GALLERY_SESSION_COOKIE = "gallery_session";
+// Site-wide (path "/") because /projects needs it too. Renamed from
+// "gallery_session", which was scoped to /gallery, so old cookies are ignored.
+export const GALLERY_SESSION_COOKIE = "studio_session";
 export const GALLERY_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function sha256(value: string) {
@@ -73,4 +76,11 @@ export async function hasGallerySession() {
   const cookieStore = await cookies();
 
   return verifySessionToken(cookieStore.get(GALLERY_SESSION_COOKIE)?.value);
+}
+
+// For pages and server actions that show or change private data.
+export async function requireGallerySession() {
+  if (!isGalleryEnabled() || !(await hasGallerySession())) {
+    redirect("/gallery/login");
+  }
 }

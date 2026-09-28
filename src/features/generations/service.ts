@@ -10,6 +10,7 @@ import {
   type GenerationRepository,
 } from "@/features/generations/repository";
 import type { MediaItem } from "@/features/media/service";
+import { resolveProjectId } from "@/features/projects/service";
 import type { GenerationRecord, StoredMediaRef } from "@/server/db/schema";
 import { AppError } from "@/server/errors/app-error";
 import { logger } from "@/server/logger";
@@ -69,7 +70,10 @@ export async function recordGeneration(
         span.setAttribute("app.generations.kind", parsed.kind);
         span.setAttribute("app.generations.status", parsed.status);
 
-        await repository.create(parsed);
+        const { project, shot, ...fields } = parsed;
+        const projectId = await resolveProjectId(project);
+
+        await repository.create({ ...fields, projectId, shot: projectId ? shot ?? null : null });
       },
     );
   } catch (error) {

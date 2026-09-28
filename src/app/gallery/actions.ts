@@ -43,7 +43,7 @@ export async function login(
   cookieStore.set(GALLERY_SESSION_COOKIE, createSessionToken(password), {
     httpOnly: true,
     maxAge: GALLERY_SESSION_TTL_MS / 1000,
-    path: "/gallery",
+    path: "/",
     sameSite: "lax",
     secure: env.NODE_ENV === "production",
   });
@@ -54,7 +54,7 @@ export async function login(
 export async function logout() {
   const cookieStore = await cookies();
 
-  cookieStore.delete({ name: GALLERY_SESSION_COOKIE, path: "/gallery" });
+  cookieStore.delete({ name: GALLERY_SESSION_COOKIE, path: "/" });
 
   redirect("/gallery/login");
 }

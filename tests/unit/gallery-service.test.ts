@@ -34,6 +34,11 @@ const record: GenerationRecord = {
     { key: null, url: "https://kie.example/b.png" },
   ],
   error: null,
+  credits: 6,
+  durationSeconds: null,
+  projectId: null,
+  shot: null,
+  selected: false,
   createdAt: "2026-09-28 01:02:03.000000+00",
   updatedAt: "2026-09-28 01:02:03.000000+00",
 };

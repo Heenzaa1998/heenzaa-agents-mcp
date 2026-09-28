@@ -34,6 +34,7 @@ describe("startVideo", () => {
       prompt: "waves at dusk",
       status: "pending",
       taskId: "vid_1",
+      durationSeconds: 5,
     });
     expect(result).toEqual({
       taskId: "vid_1",
@@ -124,6 +125,7 @@ describe("getTaskStatus", () => {
         model: "kling-2.6/text-to-video",
         state: "success",
         urls: ["https://kie.example/v.mp4"],
+        creditsConsumed: 55,
       }),
     };
     const persist = vi.fn().mockResolvedValue([stored]);
@@ -138,6 +140,7 @@ describe("getTaskStatus", () => {
     expect(history.finish).toHaveBeenCalledWith("vid_1", {
       status: "success",
       media: [{ key: "videos/vid_1-1.mp4" }],
+      credits: 55,
     });
     expect(result.media).toEqual([stored]);
   });

@@ -63,6 +63,9 @@ export async function startVideo(
         kind: "video" as const,
         operation: "generate_video",
         prompt: parsed.prompt,
+        project: parsed.project,
+        shot: parsed.shot,
+        durationSeconds: Number(parsed.duration),
       };
 
       span.setAttribute(
@@ -152,6 +155,7 @@ export async function getTaskStatus(
         await history.finish(status.taskId, {
           status: "success",
           media: toMediaRefs(result.media),
+          ...(status.creditsConsumed !== undefined ? { credits: status.creditsConsumed } : {}),
         });
       }
 

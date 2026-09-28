@@ -18,5 +18,8 @@ export default defineConfig({
     maxWorkers: 1,
     pool: "threads",
     setupFiles: ["./vitest.setup.ts"],
+    // The default 5s flaked on slow runs (tests that take ~10ms timed out while
+    // the machine was busy); 15s still catches a genuinely hung test.
+    testTimeout: 15_000,
   },
 });

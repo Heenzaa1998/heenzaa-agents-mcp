@@ -14,10 +14,10 @@ import {
   getTaskStatusSchema,
 } from "@/features/video-generation/contracts";
 import {
-  IMAGE_TO_VIDEO_MODEL,
   kieClient,
-  TEXT_TO_VIDEO_MODEL,
+  videoModelFor,
   type KieClient,
+  type StartVideoParams,
 } from "@/server/kie/client";
 import { logger } from "@/server/logger";
 import { withSpan } from "@/server/observability/tracing";
@@ -68,26 +68,42 @@ export async function startVideo(
         durationSeconds: Number(parsed.duration),
       };
 
+      const params: StartVideoParams = {
+        model: parsed.model,
+        prompt: parsed.prompt,
+        imageUrl: parsed.image_url,
+        aspectRatio: parsed.aspect_ratio,
+        duration: parsed.duration,
+        sound: parsed.sound,
+        ...(parsed.model === "kling-3.0"
+          ? {
+              mode: parsed.mode,
+              endImageUrl: parsed.end_image_url,
+              elements: parsed.elements?.map((element) => ({
+                name: element.name,
+                description: element.description,
+                imageUrls: element.image_urls,
+              })),
+            }
+          : {}),
+      };
+
+      span.setAttribute("app.video.model", parsed.model);
       span.setAttribute(
         "app.video.mode",
         parsed.image_url ? "image_to_video" : "text_to_video",
       );
       span.setAttribute("app.video.duration", parsed.duration);
+      span.setAttribute("app.video.element_count", parsed.elements?.length ?? 0);
 
       let started;
 
       try {
-        started = await client.startVideo({
-          prompt: parsed.prompt,
-          imageUrl: parsed.image_url,
-          aspectRatio: parsed.aspect_ratio,
-          duration: parsed.duration,
-          sound: parsed.sound,
-        });
+        started = await client.startVideo(params);
       } catch (error) {
         await history.record({
           ...entry,
-          model: parsed.image_url ? IMAGE_TO_VIDEO_MODEL : TEXT_TO_VIDEO_MODEL,
+          model: videoModelFor(params),
           status: "fail",
           taskId: null,
           error: describeError(error),

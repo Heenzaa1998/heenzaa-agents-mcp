@@ -10,7 +10,42 @@ function makeHistory() {
 }
 
 describe("startVideo", () => {
-  it("starts a text-to-video task and records it as pending", async () => {
+  it("starts a Kling 3.0 task with elements by default", async () => {
+    const client = {
+      startVideo: vi.fn().mockResolvedValue({ taskId: "vid_3", model: "kling-3.0/video" }),
+    };
+    const history = makeHistory();
+
+    await startVideo(
+      {
+        prompt: "@khing runs past the table",
+        image_url: "https://example.com/first.png",
+        duration: "4",
+        elements: [{ name: "khing", description: "tuxedo kitten", image_urls: ["https://example.com/k.png"] }],
+        project: "EP",
+        shot: "S08",
+      },
+      client,
+      history,
+    );
+
+    expect(client.startVideo).toHaveBeenCalledWith({
+      model: "kling-3.0",
+      prompt: "@khing runs past the table",
+      imageUrl: "https://example.com/first.png",
+      aspectRatio: "16:9",
+      duration: "4",
+      sound: false,
+      mode: "std",
+      endImageUrl: undefined,
+      elements: [{ name: "khing", description: "tuxedo kitten", imageUrls: ["https://example.com/k.png"] }],
+    });
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "kling-3.0/video", status: "pending", durationSeconds: 4, shot: "S08" }),
+    );
+  });
+
+  it("starts a Kling 2.6 text-to-video task and records it as pending", async () => {
     const client = {
       startVideo: vi
         .fn()
@@ -18,9 +53,10 @@ describe("startVideo", () => {
     };
     const history = makeHistory();
 
-    const result = await startVideo({ prompt: "  waves at dusk  " }, client, history);
+    const result = await startVideo({ prompt: "  waves at dusk  ", model: "kling-2.6" }, client, history);
 
     expect(client.startVideo).toHaveBeenCalledWith({
+      model: "kling-2.6",
       prompt: "waves at dusk",
       imageUrl: undefined,
       aspectRatio: "16:9",
@@ -51,7 +87,7 @@ describe("startVideo", () => {
     };
 
     await startVideo(
-      { prompt: "cat blinks", image_url: "https://example.com/cat.png" },
+      { prompt: "cat blinks", image_url: "https://example.com/cat.png", model: "kling-2.6" },
       client,
       makeHistory(),
     );
@@ -73,7 +109,7 @@ describe("startVideo", () => {
 
     await expect(
       startVideo(
-        { prompt: "cat blinks", image_url: "https://example.com/cat.png" },
+        { prompt: "cat blinks", image_url: "https://example.com/cat.png", model: "kling-2.6" },
         client,
         history,
       ),

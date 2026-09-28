@@ -12,6 +12,7 @@ import {
   verifyGalleryPassword,
 } from "@/server/auth/gallery-session";
 import { env } from "@/server/env";
+import { getDictionary } from "@/server/i18n";
 import { logger } from "@/server/logger";
 
 export type LoginState = { error: string | null };
@@ -24,16 +25,17 @@ export async function login(
   formData: FormData,
 ): Promise<LoginState> {
   const password = env.GALLERY_PASSWORD;
+  const { dict } = await getDictionary();
 
   if (!password) {
-    return { error: "The gallery is not configured on this server." };
+    return { error: dict.login.notConfigured };
   }
 
   if (!verifyGalleryPassword(String(formData.get("password") ?? ""), password)) {
     await new Promise((resolve) => setTimeout(resolve, FAILED_LOGIN_DELAY_MS));
     logger.warn({ operation: "gallery_login" }, "Failed gallery login");
 
-    return { error: "Wrong password." };
+    return { error: dict.login.wrongPassword };
   }
 
   const cookieStore = await cookies();

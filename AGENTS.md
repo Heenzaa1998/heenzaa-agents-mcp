@@ -116,7 +116,15 @@ tests/
 - Keep base styles inside `@layer base`. Unlayered CSS outranks every Tailwind utility.
 - Reuse `src/components/site-header.tsx`, `site-footer.tsx`, `copy-button.tsx` and the
   primitives in `src/components/ui/` before adding new components.
-- Keep the brand name and shared copy in `src/content/site.ts`, not hardcoded in pages.
+- The site is bilingual (Thai default, English). Every user-facing string lives in
+  `src/content/i18n/en.ts` and `th.ts`; never hardcode copy in components. `th` must have
+  exactly the keys of `en` (the `Dictionary` type and `tests/unit/i18n.test.ts` enforce it).
+  Pages read the language with `getDictionary()` from `src/server/i18n.ts`.
+- Do not letter-space Thai text. Use the `.eyebrow` class for small uppercase labels; it
+  drops the tracking on Thai pages.
+- Language-independent data (brand name, tool names, showcase images) lives in
+  `src/content/site.ts`. Showcase art in `public/showcase/` is public on purpose and must
+  never be the owner's private generations.
 - Public pages (`/`) must never show the owner's generations; anything private lives
   behind the gallery session (`/gallery`).
 - The project uses `typedRoutes`. When passing href values from data objects into `next/link`, use `Route` typing/casts where needed.

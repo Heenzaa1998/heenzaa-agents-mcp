@@ -1,71 +1,74 @@
-// Product copy lives here so the brand can be renamed in one place.
+// Language-independent product data. Translated copy lives in src/content/i18n.
 export const brand = {
   name: "Heenzaa Studio",
-  tagline: "Images and videos, made by talking to Claude.",
 } as const;
 
 export const MCP_ENDPOINT_PATH = "/api/mcp";
 
 export const navigationItems = [
-  { href: "/", label: "Studio" },
-  { href: "/gallery", label: "Gallery" },
+  { href: "/", key: "studio" },
+  { href: "/gallery", key: "gallery" },
 ] as const;
 
-export const mcpTools = [
-  {
-    name: "generate_image",
-    medium: "Image",
-    summary: "Turn a prompt into a picture with GPT Image, in any aspect ratio up to 4K.",
-  },
-  {
-    name: "edit_image",
-    medium: "Image",
-    summary: "Restyle or change an existing image. Pass a previous result to keep iterating.",
-  },
-  {
-    name: "generate_video",
-    medium: "Video",
-    summary: "Make a 5 or 10 second clip with Kling 2.6, from text or from one of your images.",
-  },
-  {
-    name: "get_task_status",
-    medium: "Video",
-    summary: "Check a clip in progress and collect the file when it is done.",
-  },
-  {
-    name: "get_media_url",
-    medium: "Storage",
-    summary: "Get a fresh download link for anything saved in storage.",
-  },
-  {
-    name: "list_generations",
-    medium: "History",
-    summary: "Search everything you have made by type, status or prompt.",
-  },
+export const toolNames = [
+  "generate_image",
+  "edit_image",
+  "generate_video",
+  "get_task_status",
+  "get_media_url",
+  "list_generations",
 ] as const;
 
-export const pipelineSteps = [
-  {
-    title: "Ask",
-    detail: "Describe the picture or clip in a Claude chat with the connector turned on.",
-  },
-  {
-    title: "Route",
-    detail: "The MCP server checks the request and calls the model. Keys never leave the server.",
-  },
-  {
-    title: "Generate",
-    detail: "GPT Image draws pictures and Kling 2.6 renders video, both through KIE.ai.",
-  },
-  {
-    title: "Keep",
-    detail: "Every file is copied to private storage and logged, so it shows up in the gallery.",
-  },
-] as const;
+export type ToolName = (typeof toolNames)[number];
 
-export const connectSteps = [
-  "In claude.ai, open Settings → Connectors and add a custom connector.",
-  "Use this site's MCP endpoint as the URL.",
-  "Add the request header with your MCP token.",
-  "Start a new chat, turn the connector on, and ask for an image.",
-] as const;
+export const models = ["GPT Image", "Kling 2.6", "Cloudflare R2"] as const;
+
+// Public showcase art made with the studio itself for this page (not the
+// owner's private gallery). Files live in public/showcase.
+export type ShowcaseImage = {
+  src: string;
+  width: number;
+  height: number;
+  prompt: string;
+};
+
+// Order matters: the first three form the hero stack (front, left, right) and
+// the fourth backs the featured tool card.
+export const showcase: readonly ShowcaseImage[] = [
+  {
+    src: "/showcase/neon-alley.webp",
+    width: 1024,
+    height: 1536,
+    prompt: "Cinematic portrait in a neon-lit rainy Tokyo alley, teal and magenta light, 35mm film look",
+  },
+  {
+    src: "/showcase/glass-bird.webp",
+    width: 1200,
+    height: 1200,
+    prompt: "Glass hummingbird sculpture refracting rainbow light, black background",
+  },
+  {
+    src: "/showcase/moon-cart.webp",
+    width: 1200,
+    height: 1200,
+    prompt: "Retro-futuristic Thai street food cart on the moon, Earth rising behind it",
+  },
+  {
+    src: "/showcase/chrome-ink.webp",
+    width: 1200,
+    height: 800,
+    prompt: "Liquid chrome and lime green ink swirling together, deep black background",
+  },
+  {
+    src: "/showcase/floating-island.webp",
+    width: 1200,
+    height: 800,
+    prompt: "Floating island with a glowing tree above a sea of clouds at dusk",
+  },
+  {
+    src: "/showcase/stairs.webp",
+    width: 1024,
+    height: 1536,
+    prompt: "Brutalist concrete staircase, a single figure in a red coat, golden hour",
+  },
+];

@@ -4,7 +4,7 @@ test("renders the studio landing page", async ({ page }) => {
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { level: 1, name: /make images and video by just asking/i }),
+    page.getByRole("heading", { level: 1, name: /make images and video just by asking/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: /primary/i }).getByRole("link", { name: /^gallery$/i }),

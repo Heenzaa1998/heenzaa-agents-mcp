@@ -8,7 +8,7 @@ const noop = () => () => {};
 
 // Shows the endpoint on whatever domain the site is served from; the server
 // render falls back to the bare path.
-export function EndpointUrl() {
+export function EndpointUrl({ copyLabel }: { copyLabel: string }) {
   const origin = useSyncExternalStore(
     noop,
     () => window.location.origin,
@@ -19,7 +19,7 @@ export function EndpointUrl() {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <code className="truncate text-foreground">{url}</code>
-      <CopyButton label="Copy endpoint URL" value={url} />
+      <CopyButton label={copyLabel} value={url} />
     </span>
   );
 }

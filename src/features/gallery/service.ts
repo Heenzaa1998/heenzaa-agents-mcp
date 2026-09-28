@@ -3,10 +3,17 @@ import {
   GENERATION_STATUSES,
   type ListGenerationsInput,
 } from "@/features/generations/contracts";
+import {
+  generationRepository,
+  type GenerationRepository,
+} from "@/features/generations/repository";
 import { listGenerations } from "@/features/generations/service";
-import type { GenerationRecord } from "@/server/db/schema";
+import { storeThumbnail, type Thumbnailer } from "@/features/media/service";
+import type { GenerationRecord, StoredMediaRef } from "@/server/db/schema";
+import { logger } from "@/server/logger";
 import { withSpan } from "@/server/observability/tracing";
 import { mediaStore, type MediaStore } from "@/server/storage/r2";
+import { makeThumbnail } from "@/server/storage/thumbnail";
 
 // Links on the page only need to outlive a viewing session.
 export const GALLERY_LINK_TTL_SECONDS = 60 * 60;
@@ -17,6 +24,8 @@ export type GalleryMedia = {
   // Presigned link for stored files, the provider link for unstored ones, or
   // null when storage is off and there is nothing to show.
   url: string | null;
+  // Small preview to show in the grid; null means show `url` instead.
+  thumbUrl: string | null;
 };
 
 export type GalleryItem = Pick<
@@ -24,6 +33,12 @@ export type GalleryItem = Pick<
   "id" | "kind" | "status" | "prompt" | "model" | "createdAt" | "taskId" | "error"
 > & {
   media: GalleryMedia[];
+};
+
+export type GalleryPage = {
+  items: GalleryItem[];
+  // Stored images that have no preview yet, to be filled in after the response.
+  needsThumbnails: GenerationRecord[];
 };
 
 export type GalleryFilters = Pick<ListGenerationsInput, "kind" | "status" | "query">;
@@ -50,13 +65,17 @@ export function galleryFiltersFrom(searchParams: SearchParams): GalleryFilters {
   };
 }
 
+function lacksThumbnail(record: GenerationRecord) {
+  return record.kind === "image" && record.media.some((ref) => ref.key && !ref.thumbKey);
+}
+
 type GenerationLister = (input: unknown) => Promise<GenerationRecord[]>;
 
 export async function listGalleryItems(
   filters: GalleryFilters,
   list: GenerationLister = listGenerations,
   store: MediaStore = mediaStore,
-): Promise<GalleryItem[]> {
+): Promise<GalleryPage> {
   return withSpan(
     "gallery.list",
     {
@@ -67,6 +86,9 @@ export async function listGalleryItems(
     },
     async (span) => {
       const records = await list({ ...filters, limit: GALLERY_PAGE_SIZE });
+
+      const presign = (key: string | undefined) =>
+        key && store.enabled ? store.presign(key, GALLERY_LINK_TTL_SECONDS) : null;
 
       const items = await Promise.all(
         records.map(async (record) => ({
@@ -81,21 +103,107 @@ export async function listGalleryItems(
           media: await Promise.all(
             record.media.map(async (ref): Promise<GalleryMedia> => {
               if (ref.key && store.enabled) {
-                return {
-                  key: ref.key,
-                  url: await store.presign(ref.key, GALLERY_LINK_TTL_SECONDS),
-                };
+                const [url, thumbUrl] = await Promise.all([
+                  presign(ref.key),
+                  presign(ref.thumbKey),
+                ]);
+
+                return { key: ref.key, url, thumbUrl };
               }
 
-              return { key: ref.key, url: ref.url ?? null };
+              return { key: ref.key, url: ref.url ?? null, thumbUrl: null };
             }),
           ),
         })),
       );
+      const needsThumbnails = store.enabled ? records.filter(lacksThumbnail) : [];
 
       span.setAttribute("app.gallery.items", items.length);
+      span.setAttribute("app.gallery.missing_thumbnails", needsThumbnails.length);
 
-      return items;
+      return { items, needsThumbnails };
+    },
+  );
+}
+
+type FetchLike = (input: string) => Promise<Response>;
+
+// Creates previews for images stored before thumbnails existed (or whose
+// preview failed). Runs after the page is sent, so a slow download never
+// delays the gallery. Failures are logged and retried on a later visit.
+export async function backfillThumbnails(
+  records: GenerationRecord[],
+  store: MediaStore = mediaStore,
+  repository: Pick<GenerationRepository, "updateMedia"> = generationRepository,
+  fetchFn: FetchLike = fetch,
+  thumbnailer: Thumbnailer = makeThumbnail,
+): Promise<number> {
+  if (!store.enabled || records.length === 0) {
+    return 0;
+  }
+
+  return withSpan(
+    "gallery.backfill_thumbnails",
+    {
+      attributes: {
+        "app.feature": "gallery",
+        "app.operation": "backfill_thumbnails",
+      },
+    },
+    async (span) => {
+      let created = 0;
+
+      for (const record of records) {
+        let changed = false;
+        const media: StoredMediaRef[] = [];
+
+        for (const ref of record.media) {
+          if (!ref.key || ref.thumbKey || record.kind !== "image") {
+            media.push(ref);
+            continue;
+          }
+
+          try {
+            const response = await fetchFn(await store.presign(ref.key));
+
+            if (!response.ok) {
+              throw new Error(`Original download failed with HTTP ${response.status}`);
+            }
+
+            const thumbKey = await storeThumbnail(
+              ref.key,
+              await response.arrayBuffer(),
+              store,
+              thumbnailer,
+            );
+
+            if (thumbKey) {
+              media.push({ ...ref, thumbKey });
+              changed = true;
+              created += 1;
+              continue;
+            }
+          } catch (error) {
+            logger.warn(
+              {
+                operation: "backfill_thumbnail",
+                error: error instanceof Error ? error.message : String(error),
+              },
+              "Thumbnail backfill failed; will retry on a later visit",
+            );
+          }
+
+          media.push(ref);
+        }
+
+        if (changed) {
+          await repository.updateMedia(record.id, media);
+        }
+      }
+
+      span.setAttribute("app.gallery.thumbnails_created", created);
+
+      return created;
     },
   );
 }

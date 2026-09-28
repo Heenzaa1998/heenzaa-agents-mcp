@@ -7,6 +7,7 @@ import {
   PRESIGN_TTL_SECONDS,
   type MediaStore,
 } from "@/server/storage/r2";
+import { makeThumbnail, thumbnailKeyFor } from "@/server/storage/thumbnail";
 
 export type MediaItem = {
   url: string;
@@ -14,6 +15,8 @@ export type MediaItem = {
   // temporary link.
   key: string | null;
   expiresInSeconds: number | null;
+  // Set when a small WebP preview was stored alongside an image.
+  thumbKey?: string;
 };
 
 export type PersistOptions = {
@@ -22,6 +25,36 @@ export type PersistOptions = {
 };
 
 type FetchLike = (input: string) => Promise<Response>;
+export type Thumbnailer = (
+  bytes: ArrayBuffer | Uint8Array,
+) => Promise<Uint8Array<ArrayBuffer>>;
+
+// Best-effort: a failed preview must never fail storing the original. The
+// gallery falls back to the original and regenerates missing previews later.
+export async function storeThumbnail(
+  key: string,
+  bytes: ArrayBuffer | Uint8Array,
+  store: MediaStore,
+  thumbnailer: Thumbnailer = makeThumbnail,
+): Promise<string | undefined> {
+  try {
+    const thumbKey = thumbnailKeyFor(key);
+
+    await store.put(thumbKey, await thumbnailer(bytes), "image/webp");
+
+    return thumbKey;
+  } catch (error) {
+    logger.warn(
+      {
+        operation: "store_thumbnail",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "Thumbnail failed; the original is still stored",
+    );
+
+    return undefined;
+  }
+}
 
 const CONTENT_TYPES: Record<string, string> = {
   ".jpeg": "image/jpeg",
@@ -58,9 +91,11 @@ async function persistOne(
   options: PersistOptions,
   store: MediaStore,
   fetchFn: FetchLike,
+  thumbnailer: Thumbnailer,
 ): Promise<MediaItem> {
   const extension = extensionOf(url, options.prefix);
   const key = buildMediaKey(options.prefix, options.taskId, index, extension);
+  let thumbKey: string | undefined;
 
   try {
     // Deterministic keys make this idempotent: a retried or re-polled task
@@ -80,13 +115,20 @@ async function persistOne(
         response.headers.get("content-type") ??
         "application/octet-stream";
 
-      await store.put(key, await response.arrayBuffer(), contentType);
+      const bytes = await response.arrayBuffer();
+
+      await store.put(key, bytes, contentType);
+
+      if (options.prefix === "images") {
+        thumbKey = await storeThumbnail(key, bytes, store, thumbnailer);
+      }
     }
 
     return {
       url: await store.presign(key),
       key,
       expiresInSeconds: PRESIGN_TTL_SECONDS,
+      ...(thumbKey ? { thumbKey } : {}),
     };
   } catch (error) {
     // The user already paid for the generation, so fall back to the
@@ -109,6 +151,7 @@ export async function persistRemoteMedia(
   options: PersistOptions,
   store: MediaStore = mediaStore,
   fetchFn: FetchLike = fetch,
+  thumbnailer: Thumbnailer = makeThumbnail,
 ): Promise<MediaItem[]> {
   if (!store.enabled) {
     return urls.map((url) => ({ url, key: null, expiresInSeconds: null }));
@@ -127,7 +170,7 @@ export async function persistRemoteMedia(
       const items: MediaItem[] = [];
 
       for (const [index, url] of urls.entries()) {
-        items.push(await persistOne(url, index, options, store, fetchFn));
+        items.push(await persistOne(url, index, options, store, fetchFn, thumbnailer));
       }
 
       span.setAttribute(

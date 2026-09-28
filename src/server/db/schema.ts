@@ -19,6 +19,8 @@ export type NewSubscriberRecord = typeof subscribers.$inferInsert;
 export type StoredMediaRef = {
   key: string | null;
   url?: string;
+  // Small WebP preview for the gallery (images only).
+  thumbKey?: string;
 };
 
 export const generations = pgTable("generations", {

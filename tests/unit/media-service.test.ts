@@ -63,6 +63,60 @@ describe("persistRemoteMedia", () => {
     ]);
   });
 
+  it("stores a thumbnail next to a new image", async () => {
+    const store = makeStore();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    const thumbnailer = vi.fn().mockResolvedValue(new Uint8Array([9]));
+
+    const items = await persistRemoteMedia(
+      ["https://kie.example/file.png"],
+      { prefix: "images", taskId: "task_9" },
+      store,
+      fetchFn,
+      thumbnailer,
+    );
+
+    expect(store.put).toHaveBeenCalledWith("thumbs/task_9-1.webp", expect.anything(), "image/webp");
+    expect(items[0]?.thumbKey).toBe("thumbs/task_9-1.webp");
+  });
+
+  it("still stores the image when the thumbnail fails", async () => {
+    const store = makeStore();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    const thumbnailer = vi.fn().mockRejectedValue(new Error("bad image"));
+
+    const items = await persistRemoteMedia(
+      ["https://kie.example/file.png"],
+      { prefix: "images", taskId: "task_9" },
+      store,
+      fetchFn,
+      thumbnailer,
+    );
+
+    expect(items[0]).toMatchObject({ key: "images/task_9-1.png" });
+    expect(items[0]?.thumbKey).toBeUndefined();
+  });
+
+  it("does not make thumbnails for videos", async () => {
+    const store = makeStore();
+    const fetchFn = vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 }));
+    const thumbnailer = vi.fn();
+
+    await persistRemoteMedia(
+      ["https://kie.example/clip.mp4"],
+      { prefix: "videos", taskId: "vid_1" },
+      store,
+      fetchFn,
+      thumbnailer,
+    );
+
+    expect(thumbnailer).not.toHaveBeenCalled();
+  });
+
   it("skips the upload when the object already exists", async () => {
     const store = makeStore({ exists: vi.fn().mockResolvedValue(true) });
     const fetchFn = vi.fn();

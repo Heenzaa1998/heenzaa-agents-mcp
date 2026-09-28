@@ -83,6 +83,7 @@ const envSchema = z.object({
   APP_NAME: z.string().trim().min(1).default("Next.js Drizzle Template"),
   DATABASE_URL: databaseUrlSchema.default(PLACEHOLDER_DATABASE_URL),
   DATABASE_URL_UNPOOLED: databaseUrlSchema.optional(),
+  GALLERY_PASSWORD: optionalString,
   KIE_API_KEY: optionalString,
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
@@ -113,6 +114,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env) {
     APP_NAME: source.APP_NAME,
     DATABASE_URL: source.DATABASE_URL,
     DATABASE_URL_UNPOOLED: source.DATABASE_URL_UNPOOLED || undefined,
+    GALLERY_PASSWORD: source.GALLERY_PASSWORD,
     KIE_API_KEY: source.KIE_API_KEY,
     LOG_LEVEL: source.LOG_LEVEL,
     MCP_AUTH_TOKEN: source.MCP_AUTH_TOKEN,

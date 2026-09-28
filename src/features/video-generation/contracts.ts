@@ -24,9 +24,11 @@ const elementSchema = z.object({
     .describe("Short description of the character or object."),
   image_urls: z
     .array(z.string().url())
-    .min(1)
-    .max(4)
-    .describe("Reference image URL(s) of this element, e.g. a character sheet."),
+    .min(2, "Kling 3.0 needs 2 to 4 reference images per element.")
+    .max(4, "Kling 3.0 needs 2 to 4 reference images per element.")
+    .describe(
+      "2–4 reference images of this element, each no wider or taller than 2.5:1 (e.g. front view, three-quarter view, face close-up cut from a character sheet).",
+    ),
 });
 
 export const generateVideoSchema = z

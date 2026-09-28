@@ -10,7 +10,8 @@ const CREDIT_BALANCE_URL = "https://api.kie.ai/api/v1/chat/credit";
 const USER_AGENT = "heenzaa-agents-mcp/0.1 (+https://kie.ai)";
 
 export const TEXT_TO_IMAGE_MODEL = "gpt-image-2-text-to-image";
-export const IMAGE_TO_IMAGE_MODEL = "gpt-image/1.5-image-to-image";
+export const IMAGE_TO_IMAGE_MODEL = "gpt-image-2-image-to-image";
+export const LEGACY_IMAGE_TO_IMAGE_MODEL = "gpt-image/1.5-image-to-image";
 export const TEXT_TO_VIDEO_MODEL = "kling-2.6/text-to-video";
 export const IMAGE_TO_VIDEO_MODEL = "kling-2.6/image-to-video";
 
@@ -34,8 +35,10 @@ export type EditImageParams = {
   prompt: string;
   imageUrls: string[];
   aspectRatio: string;
-  quality: string;
-};
+} & (
+  | { model: "gpt-image-2"; resolution: string; background?: string }
+  | { model: "gpt-image-1.5"; quality: string }
+);
 
 export type StartVideoParams = {
   prompt: string;
@@ -294,13 +297,16 @@ export const kieClient: KieClient = {
   },
 
   editImage(params) {
+    const model =
+      params.model === "gpt-image-2" ? IMAGE_TO_IMAGE_MODEL : LEGACY_IMAGE_TO_IMAGE_MODEL;
+
     return withSpan(
       "kie.edit_image",
       {
         attributes: {
           "app.feature": "image-generation",
           "app.operation": "edit_image",
-          "kie.model": IMAGE_TO_IMAGE_MODEL,
+          "kie.model": model,
         },
       },
       async (span) => {
@@ -308,10 +314,21 @@ export const kieClient: KieClient = {
           input_urls: params.imageUrls,
           prompt: params.prompt,
           aspect_ratio: params.aspectRatio,
-          quality: params.quality,
         };
 
-        const result = await runJob(IMAGE_TO_IMAGE_MODEL, input);
+        if (params.model === "gpt-image-2") {
+          if (params.resolution !== "1K") {
+            input.resolution = params.resolution;
+          }
+
+          if (params.background) {
+            input.background = params.background;
+          }
+        } else {
+          input.quality = params.quality;
+        }
+
+        const result = await runJob(model, input);
 
         span.setAttribute("kie.input.count", params.imageUrls.length);
         span.setAttribute("kie.result.count", result.urls.length);

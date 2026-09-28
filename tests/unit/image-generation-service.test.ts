@@ -80,11 +80,12 @@ describe("generateImage", () => {
 });
 
 describe("editImage", () => {
-  it("maps image_urls onto the client, persists and records the result", async () => {
+  it("maps image_urls onto gpt-image-2, persists and records the result", async () => {
     const client = {
       editImage: vi.fn().mockResolvedValue({
         taskId: "task_2",
         urls: ["https://img.example/2.png"],
+        creditsConsumed: 6,
       }),
     };
     const persist = vi.fn().mockResolvedValue([storedItem]);
@@ -94,7 +95,8 @@ describe("editImage", () => {
       {
         prompt: "  make it night  ",
         image_urls: ["https://example.com/a.png"],
-        quality: "high",
+        aspect_ratio: "9:16",
+        resolution: "2K",
       },
       client,
       persist,
@@ -104,8 +106,10 @@ describe("editImage", () => {
     expect(client.editImage).toHaveBeenCalledWith({
       prompt: "make it night",
       imageUrls: ["https://example.com/a.png"],
-      aspectRatio: "3:2",
-      quality: "high",
+      model: "gpt-image-2",
+      aspectRatio: "9:16",
+      resolution: "2K",
+      background: undefined,
     });
     expect(persist).toHaveBeenCalledWith(["https://img.example/2.png"], {
       prefix: "images",
@@ -114,11 +118,42 @@ describe("editImage", () => {
     expect(history.record).toHaveBeenCalledWith(
       expect.objectContaining({
         operation: "edit_image",
-        model: "gpt-image/1.5-image-to-image",
+        model: "gpt-image-2-image-to-image",
         status: "success",
         taskId: "task_2",
+        credits: 6,
       }),
     );
     expect(result.media).toEqual([storedItem]);
+  });
+
+  it("uses gpt-image-1.5 when asked, mapping auto to 3:2", async () => {
+    const client = {
+      editImage: vi.fn().mockResolvedValue({ taskId: "task_3", urls: ["https://img.example/3.png"] }),
+    };
+    const history = makeHistory();
+
+    await editImage(
+      {
+        prompt: "make it night",
+        image_urls: ["https://example.com/a.png"],
+        model: "gpt-image-1.5",
+        quality: "high",
+      },
+      client,
+      vi.fn().mockResolvedValue([storedItem]),
+      history,
+    );
+
+    expect(client.editImage).toHaveBeenCalledWith({
+      prompt: "make it night",
+      imageUrls: ["https://example.com/a.png"],
+      model: "gpt-image-1.5",
+      aspectRatio: "3:2",
+      quality: "high",
+    });
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "gpt-image/1.5-image-to-image", status: "success" }),
+    );
   });
 });

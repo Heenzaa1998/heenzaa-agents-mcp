@@ -126,7 +126,10 @@ tests/
   `src/content/site.ts`. Showcase art in `public/showcase/` is public on purpose and must
   never be the owner's private generations.
 - Public pages (`/`) must never show the owner's generations; anything private lives
-  behind the gallery session (`/gallery`).
+  behind the gallery session (`/gallery`, `/projects`). Private pages call
+  `requireGallerySession()` and every server action re-checks the session itself.
+- Money is shown in baht from stored KIE credits times the owner-set rate (settings table);
+  never store baht amounts. Format with `formatBaht` / `formatCredits` from `src/lib/format.ts`.
 - The project uses `typedRoutes`. When passing href values from data objects into `next/link`, use `Route` typing/casts where needed.
 
 ## Observability Rules

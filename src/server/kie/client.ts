@@ -6,6 +6,7 @@ import { withSpan } from "@/server/observability/tracing";
 // it reaches a terminal state, then read the hosted result URLs.
 const CREATE_TASK_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const RECORD_INFO_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
+const CREDIT_BALANCE_URL = "https://api.kie.ai/api/v1/chat/credit";
 const USER_AGENT = "heenzaa-agents-mcp/0.1 (+https://kie.ai)";
 
 export const TEXT_TO_IMAGE_MODEL = "gpt-image-2-text-to-image";
@@ -53,6 +54,10 @@ export type KieTaskStatus = {
   progress?: number;
   urls?: string[];
   failReason?: string;
+  // Credits KIE charged for the task, once known.
+  creditsConsumed?: number;
+  // Requested clip length for video tasks.
+  durationSeconds?: number;
 };
 
 export type KieClient = {
@@ -60,12 +65,14 @@ export type KieClient = {
   editImage: (params: EditImageParams) => Promise<KieImageResult>;
   startVideo: (params: StartVideoParams) => Promise<{ taskId: string; model: string }>;
   getTask: (taskId: string) => Promise<KieTaskStatus>;
+  getBalance: () => Promise<number>;
 };
 
 type KiePayload = { code?: number; msg?: string; data?: unknown };
 
 type KieTaskData = {
   model?: string;
+  param?: string;
   progress?: number;
   state?: string;
   resultJson?: string;
@@ -183,6 +190,22 @@ async function fetchTaskData(
   );
 
   return (payload.data as KieTaskData | null | undefined) ?? null;
+}
+
+// `param` echoes the original request as JSON; its `input` may itself be a
+// JSON string. Only the clip duration is needed from it.
+function durationFrom(param: string | undefined): number | undefined {
+  try {
+    const request = JSON.parse(param ?? "") as { input?: unknown };
+    const input = (typeof request.input === "string" ? JSON.parse(request.input) : request.input ?? request) as {
+      duration?: unknown;
+    };
+    const seconds = Number(input.duration);
+
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function failReasonOf(data: KieTaskData) {
@@ -360,6 +383,9 @@ export const kieClient: KieClient = {
           model: data.model ?? "unknown",
           state: data.state ?? "unknown",
           progress: typeof data.progress === "number" ? data.progress : undefined,
+          creditsConsumed:
+            typeof data.creditsConsumed === "number" ? data.creditsConsumed : undefined,
+          durationSeconds: durationFrom(data.param),
         };
 
         span.setAttribute("kie.model", status.model);
@@ -374,6 +400,28 @@ export const kieClient: KieClient = {
         }
 
         return status;
+      },
+    );
+  },
+
+  getBalance() {
+    return withSpan(
+      "kie.get_balance",
+      { attributes: { "app.feature": "costs", "app.operation": "get_balance" } },
+      async () => {
+        const payload = await readJson(
+          await fetch(CREDIT_BALANCE_URL, { headers: authHeaders(requireApiKey()) }),
+          "credit balance",
+        );
+
+        if (typeof payload.data !== "number") {
+          throw new AppError("KIE did not return a credit balance.", {
+            code: "kie_balance_unavailable",
+            statusCode: 502,
+          });
+        }
+
+        return payload.data;
       },
     );
   },

@@ -18,6 +18,7 @@ describe("generateImage", () => {
       generateImage: vi.fn().mockResolvedValue({
         taskId: "task_1",
         urls: ["https://img.example/1.png"],
+        creditsConsumed: 6,
       }),
     };
     const persist = vi.fn().mockResolvedValue([storedItem]);
@@ -48,6 +49,7 @@ describe("generateImage", () => {
       status: "success",
       taskId: "task_1",
       media: [{ key: "images/task_1-1.png" }],
+      credits: 6,
     });
     expect(result).toEqual({ taskId: "task_1", media: [storedItem] });
   });

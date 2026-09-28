@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workTagShape } from "@/features/projects/contracts";
 
 // Allowed values mirror the KIE.ai Kling 2.6 model docs.
 export const VIDEO_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
@@ -30,6 +31,7 @@ export const generateVideoSchema = z.object({
     .boolean()
     .default(false)
     .describe("Also generate audio. Costs more credits."),
+  ...workTagShape,
 });
 
 export type GenerateVideoInput = z.infer<typeof generateVideoSchema>;

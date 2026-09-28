@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workTagShape } from "@/features/projects/contracts";
 
 // Allowed values mirror the KIE.ai GPT Image model docs.
 export const TEXT_TO_IMAGE_ASPECT_RATIOS = [
@@ -29,6 +30,7 @@ export const generateImageSchema = z.object({
     .enum(BACKGROUNDS)
     .optional()
     .describe("Background style; use transparent for logos/icons (1K only)."),
+  ...workTagShape,
 });
 
 export type GenerateImageInput = z.infer<typeof generateImageSchema>;
@@ -55,6 +57,7 @@ export const editImageSchema = z.object({
     .enum(QUALITIES)
     .default("medium")
     .describe("medium is faster; high is slower and more detailed."),
+  ...workTagShape,
 });
 
 export type EditImageInput = z.infer<typeof editImageSchema>;

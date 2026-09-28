@@ -60,6 +60,8 @@ export async function generateImage(
         operation: "generate_image",
         model: TEXT_TO_IMAGE_MODEL,
         prompt: parsed.prompt,
+        project: parsed.project,
+        shot: parsed.shot,
       };
 
       span.setAttribute("app.image.aspect_ratio", parsed.aspect_ratio);
@@ -94,6 +96,7 @@ export async function generateImage(
         status: "success",
         taskId: result.taskId,
         media: toMediaRefs(media),
+        credits: result.creditsConsumed ?? null,
       });
 
       span.setAttribute("app.image.result_count", media.length);
@@ -134,6 +137,8 @@ export async function editImage(
         operation: "edit_image",
         model: IMAGE_TO_IMAGE_MODEL,
         prompt: parsed.prompt,
+        project: parsed.project,
+        shot: parsed.shot,
       };
 
       span.setAttribute("app.image.aspect_ratio", parsed.aspect_ratio);
@@ -168,6 +173,7 @@ export async function editImage(
         status: "success",
         taskId: result.taskId,
         media: toMediaRefs(media),
+        credits: result.creditsConsumed ?? null,
       });
 
       span.setAttribute("app.image.result_count", media.length);

@@ -18,6 +18,12 @@ export const newGenerationSchema = z.object({
   taskId: z.string().trim().min(1).nullable(),
   media: z.array(storedMediaRefSchema).default([]),
   error: z.string().nullable().default(null),
+  credits: z.number().nonnegative().nullable().default(null),
+  durationSeconds: z.number().int().positive().nullable().default(null),
+  // Project name and shot label as given to the tool; the project is resolved
+  // (and created if new) when the row is written.
+  project: z.string().trim().min(1).optional(),
+  shot: z.string().trim().min(1).optional(),
 });
 
 export type NewGenerationInput = z.input<typeof newGenerationSchema>;
@@ -27,6 +33,8 @@ export const generationOutcomeSchema = z.object({
   status: z.enum(["success", "fail"]),
   media: z.array(storedMediaRefSchema).optional(),
   error: z.string().nullable().optional(),
+  credits: z.number().nonnegative().optional(),
+  durationSeconds: z.number().int().positive().optional(),
 });
 
 export type GenerationOutcome = z.infer<typeof generationOutcomeSchema>;

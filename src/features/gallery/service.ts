@@ -30,7 +30,18 @@ export type GalleryMedia = {
 
 export type GalleryItem = Pick<
   GenerationRecord,
-  "id" | "kind" | "status" | "prompt" | "model" | "createdAt" | "taskId" | "error"
+  | "id"
+  | "kind"
+  | "status"
+  | "prompt"
+  | "model"
+  | "createdAt"
+  | "taskId"
+  | "error"
+  | "credits"
+  | "projectId"
+  | "shot"
+  | "selected"
 > & {
   media: GalleryMedia[];
 };
@@ -65,6 +76,43 @@ export function galleryFiltersFrom(searchParams: SearchParams): GalleryFilters {
   };
 }
 
+export async function toGalleryMedia(
+  ref: StoredMediaRef,
+  store: MediaStore = mediaStore,
+): Promise<GalleryMedia> {
+  if (ref.key && store.enabled) {
+    const [url, thumbUrl] = await Promise.all([
+      store.presign(ref.key, GALLERY_LINK_TTL_SECONDS),
+      ref.thumbKey ? store.presign(ref.thumbKey, GALLERY_LINK_TTL_SECONDS) : null,
+    ]);
+
+    return { key: ref.key, url, thumbUrl };
+  }
+
+  return { key: ref.key, url: ref.url ?? null, thumbUrl: null };
+}
+
+export async function toGalleryItem(
+  record: GenerationRecord,
+  store: MediaStore = mediaStore,
+): Promise<GalleryItem> {
+  return {
+    id: record.id,
+    kind: record.kind,
+    status: record.status,
+    prompt: record.prompt,
+    model: record.model,
+    createdAt: record.createdAt,
+    taskId: record.taskId,
+    error: record.error,
+    credits: record.credits,
+    projectId: record.projectId,
+    shot: record.shot,
+    selected: record.selected,
+    media: await Promise.all(record.media.map((ref) => toGalleryMedia(ref, store))),
+  };
+}
+
 function lacksThumbnail(record: GenerationRecord) {
   return record.kind === "image" && record.media.some((ref) => ref.key && !ref.thumbKey);
 }
@@ -87,35 +135,7 @@ export async function listGalleryItems(
     async (span) => {
       const records = await list({ ...filters, limit: GALLERY_PAGE_SIZE });
 
-      const presign = (key: string | undefined) =>
-        key && store.enabled ? store.presign(key, GALLERY_LINK_TTL_SECONDS) : null;
-
-      const items = await Promise.all(
-        records.map(async (record) => ({
-          id: record.id,
-          kind: record.kind,
-          status: record.status,
-          prompt: record.prompt,
-          model: record.model,
-          createdAt: record.createdAt,
-          taskId: record.taskId,
-          error: record.error,
-          media: await Promise.all(
-            record.media.map(async (ref): Promise<GalleryMedia> => {
-              if (ref.key && store.enabled) {
-                const [url, thumbUrl] = await Promise.all([
-                  presign(ref.key),
-                  presign(ref.thumbKey),
-                ]);
-
-                return { key: ref.key, url, thumbUrl };
-              }
-
-              return { key: ref.key, url: ref.url ?? null, thumbUrl: null };
-            }),
-          ),
-        })),
-      );
+      const items = await Promise.all(records.map((record) => toGalleryItem(record, store)));
       const needsThumbnails = store.enabled ? records.filter(lacksThumbnail) : [];
 
       span.setAttribute("app.gallery.items", items.length);

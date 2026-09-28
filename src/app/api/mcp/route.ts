@@ -12,6 +12,8 @@ import { listGenerationsSchema } from "@/features/generations/contracts";
 import { listGenerations } from "@/features/generations/service";
 import { getMediaUrlSchema } from "@/features/media/contracts";
 import { getMediaUrl, type MediaItem } from "@/features/media/service";
+import { getCostsSchema } from "@/features/projects/contracts";
+import { getCostReport } from "@/features/projects/service";
 import {
   generateVideoSchema,
   getTaskStatusSchema,
@@ -56,6 +58,14 @@ function describeGeneration(record: GenerationRecord) {
   const lines = [
     `#${record.id} ${record.kind} · ${record.status} · ${record.createdAt.slice(0, 16)} UTC · "${prompt}"`,
   ];
+
+  if (record.credits !== null || record.shot) {
+    lines.push(
+      `   ${[record.credits !== null ? `${record.credits} credits` : null, record.shot ? `shot: ${record.shot}` : null]
+        .filter(Boolean)
+        .join(" · ")}`,
+    );
+  }
 
   if (record.status === "pending" && record.taskId) {
     lines.push(`   task_id: ${record.taskId} (call get_task_status to finish it)`);
@@ -237,6 +247,23 @@ const mcpHandler = createMcpHandler(
           );
         } catch (error) {
           return toErrorResult(error, "Could not list generations.");
+        }
+      },
+    );
+
+    server.registerTool(
+      "get_costs",
+      {
+        title: "Report costs",
+        description:
+          "Report KIE credits spent and their baht value per project and shot: takes per shot (how many times it was regenerated), failed takes, chosen takes, cost per second of footage actually used, and the remaining credit balance.",
+        inputSchema: getCostsSchema,
+      },
+      async (args) => {
+        try {
+          return textResult(await getCostReport(args));
+        } catch (error) {
+          return toErrorResult(error, "Could not build the cost report.");
         }
       },
     );

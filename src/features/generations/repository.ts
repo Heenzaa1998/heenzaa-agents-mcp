@@ -13,7 +13,12 @@ import {
 import { withDatabaseSpan } from "@/server/observability/tracing";
 
 export type GenerationRepository = {
-  create: (input: NewGeneration) => Promise<GenerationRecord>;
+  create: (
+    input: Omit<NewGeneration, "project" | "shot"> & {
+      projectId: number | null;
+      shot: string | null;
+    },
+  ) => Promise<GenerationRecord>;
   // Returns how many rows were updated (0 when the task was never recorded).
   finishByTaskId: (taskId: string, outcome: GenerationOutcome) => Promise<number>;
   list: (filters: ListGenerationsInput) => Promise<GenerationRecord[]>;
@@ -56,6 +61,10 @@ export const generationRepository: GenerationRepository = {
           .set({
             status: outcome.status,
             error: outcome.error ?? null,
+            ...(outcome.credits !== undefined ? { credits: outcome.credits } : {}),
+            ...(outcome.durationSeconds !== undefined
+              ? { durationSeconds: outcome.durationSeconds }
+              : {}),
             updatedAt: sql`now()`,
             ...(outcome.media ? { media: outcome.media } : {}),
           })

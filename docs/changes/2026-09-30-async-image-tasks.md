@@ -37,7 +37,7 @@
 
 - [x] `pnpm check` — lint + typecheck + test ผ่าน (149/149)
 - [ ] `pnpm e2e` — ไม่รัน (DB ร่วมกับ production)
-- [ ] production: `get_task_status` กับ taskId ของภาพที่สำเร็จแล้ว (เติมหลัง deploy)
+- [x] production (`f587b33`): `get_task_status` กับ taskId ของภาพ S01 ที่สำเร็จแล้ว ได้ลิงก์ภาพและ key `images/...` กลับมา ไม่ใช้เครดิต
 
 ## ตามมาทีหลัง
 

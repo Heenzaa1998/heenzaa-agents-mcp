@@ -13,10 +13,13 @@ import {
   type PersistOptions,
 } from "@/features/media/service";
 import {
+  generateTalkingVideoSchema,
   generateVideoSchema,
   getTaskStatusSchema,
 } from "@/features/video-generation/contracts";
 import {
+  AVATAR_MODELS,
+  isVideoModel,
   kieClient,
   videoModelFor,
   type KieClient,
@@ -26,6 +29,7 @@ import { logger } from "@/server/logger";
 import { withSpan } from "@/server/observability/tracing";
 
 type VideoStarter = Pick<KieClient, "startVideo">;
+type TalkingVideoStarter = Pick<KieClient, "startTalkingVideo">;
 type TaskReader = Pick<KieClient, "getTask">;
 type MediaPersister = (
   urls: string[],
@@ -152,6 +156,76 @@ export async function startVideo(
   );
 }
 
+export type StartTalkingVideoResult = {
+  taskId: string;
+  model: string;
+};
+
+export async function startTalkingVideo(
+  input: unknown,
+  client: TalkingVideoStarter = kieClient,
+  history: Pick<GenerationLog, "record"> = generationLog,
+  resolve: MediaResolver = resolveMediaInputs,
+): Promise<StartTalkingVideoResult> {
+  return withSpan(
+    "video-generation.start_talking",
+    {
+      attributes: {
+        "app.feature": "video-generation",
+        "app.operation": "start_talking_video",
+      },
+    },
+    async (span) => {
+      const parsed = generateTalkingVideoSchema.parse(input);
+      const entry = {
+        kind: "video" as const,
+        operation: "generate_talking_video",
+        prompt: parsed.prompt,
+        project: parsed.project,
+        shot: parsed.shot,
+        inputs: [parsed.image_url, parsed.audio_url].map(toStoredKey),
+      };
+      const [imageUrl, audioUrl] = await resolve([parsed.image_url, parsed.audio_url]);
+
+      span.setAttribute("app.video.model", AVATAR_MODELS[parsed.mode]);
+
+      let started;
+
+      try {
+        started = await client.startTalkingVideo({
+          mode: parsed.mode,
+          prompt: parsed.prompt,
+          imageUrl: imageUrl!,
+          audioUrl: audioUrl!,
+        });
+      } catch (error) {
+        await history.record({
+          ...entry,
+          model: AVATAR_MODELS[parsed.mode],
+          status: "fail",
+          taskId: null,
+          error: describeError(error),
+        });
+        throw error;
+      }
+
+      await history.record({
+        ...entry,
+        model: started.model,
+        status: "pending",
+        taskId: started.taskId,
+      });
+
+      logger.info(
+        { operation: "start_talking_video", model: started.model },
+        "Talking video task started",
+      );
+
+      return { taskId: started.taskId, model: started.model };
+    },
+  );
+}
+
 export async function getTaskStatus(
   input: unknown,
   client: TaskReader = kieClient,
@@ -184,7 +258,7 @@ export async function getTaskStatus(
         // Storage keys are derived from the task id, so checking a finished
         // task again reuses the stored file instead of uploading it twice.
         result.media = await persist(status.urls, {
-          prefix: status.model.includes("video") ? "videos" : "images",
+          prefix: isVideoModel(status.model) ? "videos" : "images",
           taskId: status.taskId,
         });
 

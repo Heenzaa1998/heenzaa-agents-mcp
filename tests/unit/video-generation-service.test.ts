@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTaskStatus, startVideo } from "@/features/video-generation/service";
+import { getTaskStatus, startTalkingVideo, startVideo } from "@/features/video-generation/service";
 import { AppError } from "@/server/errors/app-error";
 
 function makeHistory() {
@@ -214,6 +214,25 @@ describe("getTaskStatus", () => {
     expect(result.media).toEqual([stored]);
   });
 
+  it("stores a finished talking video under videos/", async () => {
+    const client = {
+      getTask: vi.fn().mockResolvedValue({
+        taskId: "ava_1",
+        model: "kling/ai-avatar-standard",
+        state: "success",
+        urls: ["https://kie.example/a.mp4"],
+      }),
+    };
+    const persist = vi.fn().mockResolvedValue([]);
+
+    await getTaskStatus({ task_id: "ava_1" }, client, persist, makeHistory());
+
+    expect(persist).toHaveBeenCalledWith(["https://kie.example/a.mp4"], {
+      prefix: "videos",
+      taskId: "ava_1",
+    });
+  });
+
   it("uses the images prefix for a finished image task", async () => {
     const client = {
       getTask: vi.fn().mockResolvedValue({
@@ -254,5 +273,69 @@ describe("getTaskStatus", () => {
       status: "fail",
       error: "422 content policy",
     });
+  });
+});
+
+describe("startTalkingVideo", () => {
+  it("resolves the image and audio keys and records the task", async () => {
+    const client = {
+      startTalkingVideo: vi
+        .fn()
+        .mockResolvedValue({ taskId: "ava_1", model: "kling/ai-avatar-standard" }),
+    };
+    const history = makeHistory();
+    const resolve = vi.fn(async (values: string[]) => values.map((v) => `https://signed.example/${v}`));
+
+    const result = await startTalkingVideo(
+      {
+        image_url: "images/abc-1.png",
+        audio_url: "refs/ep02/l02.mp3",
+        prompt: "She sighs and talks to the camera",
+        project: "EP",
+        shot: "S02",
+      },
+      client,
+      history,
+      resolve,
+    );
+
+    expect(resolve).toHaveBeenCalledWith(["images/abc-1.png", "refs/ep02/l02.mp3"]);
+    expect(client.startTalkingVideo).toHaveBeenCalledWith({
+      mode: "standard",
+      prompt: "She sighs and talks to the camera",
+      imageUrl: "https://signed.example/images/abc-1.png",
+      audioUrl: "https://signed.example/refs/ep02/l02.mp3",
+    });
+    expect(history.record).toHaveBeenCalledWith({
+      kind: "video",
+      operation: "generate_talking_video",
+      model: "kling/ai-avatar-standard",
+      prompt: "She sighs and talks to the camera",
+      project: "EP",
+      shot: "S02",
+      status: "pending",
+      taskId: "ava_1",
+      inputs: ["images/abc-1.png", "refs/ep02/l02.mp3"],
+    });
+    expect(result).toEqual({ taskId: "ava_1", model: "kling/ai-avatar-standard" });
+  });
+
+  it("records a start failure with the chosen avatar model", async () => {
+    const client = {
+      startTalkingVideo: vi.fn().mockRejectedValue(new AppError("KIE said no", { code: "kie_create_failed", statusCode: 502 })),
+    };
+    const history = makeHistory();
+
+    await expect(
+      startTalkingVideo(
+        { image_url: "https://example.com/a.png", audio_url: "https://example.com/a.mp3", prompt: "talks", mode: "pro" },
+        client,
+        history,
+        async (values) => values,
+      ),
+    ).rejects.toThrow("KIE said no");
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "kling/ai-avatar-pro", status: "fail", taskId: null }),
+    );
   });
 });

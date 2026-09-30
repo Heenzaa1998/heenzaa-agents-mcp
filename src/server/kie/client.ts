@@ -67,6 +67,23 @@ export type StartVideoParams = {
   elements?: VideoElement[];
 };
 
+export const AVATAR_MODELS = {
+  standard: "kling/ai-avatar-standard",
+  pro: "kling/ai-avatar-pro",
+} as const;
+
+export type StartTalkingVideoParams = {
+  mode: keyof typeof AVATAR_MODELS;
+  prompt: string;
+  imageUrl: string;
+  audioUrl: string;
+};
+
+// Whether a finished task's files are videos (stored under videos/).
+export function isVideoModel(model: string) {
+  return model.includes("video") || model.includes("avatar");
+}
+
 // KIE model id for a request; exported so failures can be recorded with it.
 export function videoModelFor(params: Pick<StartVideoParams, "model" | "imageUrl">) {
   if (params.model === "kling-3.0") return KLING_3_MODEL;
@@ -91,6 +108,7 @@ export type KieClient = {
   generateImage: (params: GenerateImageParams, hooks?: ImageTaskHooks) => Promise<KieImageResult>;
   editImage: (params: EditImageParams, hooks?: ImageTaskHooks) => Promise<KieImageResult>;
   startVideo: (params: StartVideoParams) => Promise<{ taskId: string; model: string }>;
+  startTalkingVideo: (params: StartTalkingVideoParams) => Promise<{ taskId: string; model: string }>;
   getTask: (taskId: string) => Promise<KieTaskStatus>;
   getBalance: () => Promise<number>;
 };
@@ -413,6 +431,30 @@ export const kieClient: KieClient = {
         }
 
         const taskId = await createTask(requireApiKey(), model, input);
+
+        return { taskId, model };
+      },
+    );
+  },
+
+  startTalkingVideo(params) {
+    const model = AVATAR_MODELS[params.mode];
+
+    return withSpan(
+      "kie.start_talking_video",
+      {
+        attributes: {
+          "app.feature": "video-generation",
+          "app.operation": "start_talking_video",
+          "kie.model": model,
+        },
+      },
+      async () => {
+        const taskId = await createTask(requireApiKey(), model, {
+          image_url: params.imageUrl,
+          audio_url: params.audioUrl,
+          prompt: params.prompt,
+        });
 
         return { taskId, model };
       },

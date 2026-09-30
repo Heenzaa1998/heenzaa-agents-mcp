@@ -17,10 +17,15 @@ import { getCostReport } from "@/features/projects/service";
 import { listReferencesSchema, uploadReferenceSchema } from "@/features/references/contracts";
 import { listReferences, uploadReference, type ReferenceItem } from "@/features/references/service";
 import {
+  generateTalkingVideoSchema,
   generateVideoSchema,
   getTaskStatusSchema,
 } from "@/features/video-generation/contracts";
-import { getTaskStatus, startVideo } from "@/features/video-generation/service";
+import {
+  getTaskStatus,
+  startTalkingVideo,
+  startVideo,
+} from "@/features/video-generation/service";
 import type { GenerationRecord } from "@/server/db/schema";
 import { AppError } from "@/server/errors/app-error";
 import { observeRoute } from "@/server/http/observed-route";
@@ -238,11 +243,32 @@ const mcpHandler = createMcpHandler(
     );
 
     server.registerTool(
+      "generate_talking_video",
+      {
+        title: "Generate talking video (Kling AI Avatar)",
+        description:
+          "Animate a character image so its mouth follows a given speech file (lip sync), keeping your own dubbed voice. Pass image_url and audio_url (URLs or storage keys); the clip is as long as the audio. Best for close-ups of one character talking; use generate_video for action shots. Returns a task_id; call get_task_status with it.",
+        inputSchema: generateTalkingVideoSchema,
+      },
+      async (args) => {
+        try {
+          const started = await startTalkingVideo(args);
+
+          return textResult(
+            `Talking video task started (${started.model}). task_id: ${started.taskId}\nCall get_task_status with this task_id to check progress; when it succeeds it returns the download link.`,
+          );
+        } catch (error) {
+          return toErrorResult(error, "Could not start the talking video.");
+        }
+      },
+    );
+
+    server.registerTool(
       "get_task_status",
       {
         title: "Check a generation task",
         description:
-          "Check a task started by generate_video, or an image task that generate_image/edit_image reported as still running. While running it reports progress; once finished it saves the file to storage and returns a download link plus a storage key.",
+          "Check a task started by generate_video or generate_talking_video, or an image task that generate_image/edit_image reported as still running. While running it reports progress; once finished it saves the file to storage and returns a download link plus a storage key.",
         inputSchema: getTaskStatusSchema,
       },
       async (args) => {

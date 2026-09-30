@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  generateTalkingVideoSchema,
   generateVideoSchema,
   getTaskStatusSchema,
 } from "@/features/video-generation/contracts";
@@ -82,5 +83,28 @@ describe("getTaskStatusSchema", () => {
 
   it.each(["", "../x", "a b", "x".repeat(129)])("rejects %s", (taskId) => {
     expect(getTaskStatusSchema.safeParse({ task_id: taskId }).success).toBe(false);
+  });
+});
+
+describe("generateTalkingVideoSchema", () => {
+  it("needs both an image and an audio file and defaults to standard", () => {
+    expect(
+      generateTalkingVideoSchema.parse({
+        image_url: "images/abc-1.png",
+        audio_url: "refs/ep02/l02.mp3",
+        prompt: " talks ",
+      }),
+    ).toEqual({ image_url: "images/abc-1.png", audio_url: "refs/ep02/l02.mp3", prompt: "talks", mode: "standard" });
+    expect(generateTalkingVideoSchema.safeParse({ image_url: "images/abc-1.png", prompt: "talks" }).success).toBe(false);
+  });
+
+  it("rejects a non-https audio link", () => {
+    expect(
+      generateTalkingVideoSchema.safeParse({
+        image_url: "images/abc-1.png",
+        audio_url: "http://example.com/a.mp3",
+        prompt: "talks",
+      }).success,
+    ).toBe(false);
   });
 });

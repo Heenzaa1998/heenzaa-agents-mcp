@@ -130,6 +130,32 @@ export const generateVideoSchema = z
 
 export type GenerateVideoInput = z.infer<typeof generateVideoSchema>;
 
+// Kling AI Avatar: the mouth follows a given audio file, so dubbed lines keep
+// their own voice.
+export const TALKING_VIDEO_MODES = ["standard", "pro"] as const;
+
+export const generateTalkingVideoSchema = z.object({
+  image_url: mediaInputSchema.describe(
+    "The character to animate (JPEG/PNG, max 10MB): an https URL or a storage key such as images/<taskId>-1.png or refs/<name>.<ext>.",
+  ),
+  audio_url: mediaInputSchema.describe(
+    "The speech to lip-sync (MP3/WAV/AAC/OGG, max 5 minutes): an https URL or a storage key such as refs/<name>.mp3. The clip is as long as the audio.",
+  ),
+  prompt: z
+    .string()
+    .trim()
+    .min(1, "Prompt is required.")
+    .max(5000, "Prompt must be at most 5000 characters.")
+    .describe("Expression, gestures and camera; the words come from the audio."),
+  mode: z
+    .enum(TALKING_VIDEO_MODES)
+    .default("standard")
+    .describe("standard (720p, cheaper) or pro (1080p)."),
+  ...workTagShape,
+});
+
+export type GenerateTalkingVideoInput = z.infer<typeof generateTalkingVideoSchema>;
+
 export const getTaskStatusSchema = z.object({
   task_id: z
     .string()

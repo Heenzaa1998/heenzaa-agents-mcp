@@ -4,6 +4,7 @@ import {
   toMediaRefs,
   type GenerationLog,
 } from "@/features/generations/service";
+import { toStoredKey } from "@/features/media/contracts";
 import {
   persistRemoteMedia,
   resolveMediaInputs,
@@ -69,6 +70,13 @@ export async function startVideo(
         project: parsed.project,
         shot: parsed.shot,
         durationSeconds: Number(parsed.duration),
+        inputs: [
+          parsed.image_url,
+          parsed.end_image_url,
+          ...(parsed.elements ?? []).flatMap((element) => element.image_urls),
+        ]
+          .filter((value): value is string => value !== undefined)
+          .map(toStoredKey),
       };
 
       // Storage keys become presigned links before KIE sees them.

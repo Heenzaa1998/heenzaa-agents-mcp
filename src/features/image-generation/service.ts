@@ -8,6 +8,7 @@ import {
   toMediaRefs,
   type GenerationLog,
 } from "@/features/generations/service";
+import { toStoredKey } from "@/features/media/contracts";
 import {
   persistRemoteMedia,
   resolveMediaInputs,
@@ -52,6 +53,7 @@ type HistoryEntry = {
   prompt: string;
   project?: string;
   shot?: string;
+  inputs?: string[];
 };
 
 function countStored(media: MediaItem[]) {
@@ -184,6 +186,7 @@ export async function editImage(
         prompt: parsed.prompt,
         project: parsed.project,
         shot: parsed.shot,
+        inputs: parsed.image_urls.map(toStoredKey),
       };
 
       // Storage keys become presigned links before KIE sees them.

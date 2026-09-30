@@ -14,6 +14,24 @@ export function isStoredKey(value: string) {
   return MEDIA_KEY_PATTERN.test(value);
 }
 
+// Normalizes a tool input for the history: a presigned link to our own
+// bucket becomes its storage key, so a take can be matched to the images it
+// was made from; anything else is kept as given.
+export function toStoredKey(value: string) {
+  if (isStoredKey(value)) {
+    return value;
+  }
+
+  try {
+    const match = /\/((?:images|videos|refs)\/[^?]+)$/.exec(new URL(value).pathname);
+    const candidate = match ? decodeURIComponent(match[1]!) : null;
+
+    return candidate && isStoredKey(candidate) ? candidate : value;
+  } catch {
+    return value;
+  }
+}
+
 // An image input for a tool: a public https URL, or a storage key of a stored
 // result / uploaded reference, which the server turns into a link itself.
 export const mediaInputSchema = z

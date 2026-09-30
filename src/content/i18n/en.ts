@@ -136,6 +136,20 @@ export const en = {
     choose: "Use this take",
     shotSummary: (takes: number, failed: number) =>
       `${takes} ${takes === 1 ? "take" : "takes"}${failed > 0 ? `, ${failed} failed` : ""}`,
+    references: "References",
+    referencesHelp: "Uploaded with upload_reference. Use the key in edit_image or generate_video.",
+    keyframes: "Keyframes",
+    videos: "Video takes",
+    madeFrom: "Made from",
+    inspector: {
+      play: "Play",
+      pause: "Pause",
+      back: "−0.5s",
+      forward: "+0.5s",
+      zoomHint: "Tap the picture to zoom in on that spot",
+      frames: "Show frames",
+      hideFrames: "Hide frames",
+    },
   },
   login: {
     title: "The gallery is private",

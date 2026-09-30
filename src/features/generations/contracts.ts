@@ -24,6 +24,8 @@ export const newGenerationSchema = z.object({
   // (and created if new) when the row is written.
   project: z.string().trim().min(1).optional(),
   shot: z.string().trim().min(1).optional(),
+  // Source images as storage keys (or URLs), see schema.inputs.
+  inputs: z.array(z.string().trim().min(1).max(2000)).max(64).default([]),
 });
 
 export type NewGenerationInput = z.input<typeof newGenerationSchema>;

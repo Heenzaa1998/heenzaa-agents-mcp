@@ -95,6 +95,17 @@ export function summarizeCosts(records: GenerationRecord[]): CostSummary {
   };
 }
 
+// Shot labels sort like people expect: EP01-S2 before EP01-S10; no label last.
+export function sortShots<T extends { label: string | null }>(shots: T[]): T[] {
+  return [...shots].sort((a, b) => {
+    if (a.label === null || b.label === null) {
+      return a.label === null ? (b.label === null ? 0 : 1) : -1;
+    }
+
+    return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+  });
+}
+
 export function toBaht(credits: number, rate: number) {
   return Math.round(credits * rate * 100) / 100;
 }

@@ -30,6 +30,7 @@ describe("recordGeneration", () => {
       durationSeconds: null,
       projectId: null,
       shot: null,
+      inputs: [],
     });
   });
 

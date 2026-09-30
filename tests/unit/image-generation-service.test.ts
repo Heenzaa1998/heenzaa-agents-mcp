@@ -202,15 +202,20 @@ describe("editImage with storage keys", () => {
     const client = { editImage: accepting("task_9", { state: "success", urls: ["https://img.example/9.png"] }) };
     const resolve = vi.fn(async (values: string[]) => values.map((v) => (v.startsWith("https://") ? v : `https://r2.example/${v}?sig=1`)));
 
+    const history = makeHistory();
+
     await editImage(
       { prompt: "x", image_urls: ["refs/sister/main.jpg", "https://example.com/bg.png"] },
       client,
       vi.fn().mockResolvedValue([storedItem]),
-      makeHistory(),
+      history,
       resolve,
     );
 
     expect(resolve).toHaveBeenCalledWith(["refs/sister/main.jpg", "https://example.com/bg.png"]);
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({ inputs: ["refs/sister/main.jpg", "https://example.com/bg.png"] }),
+    );
     expect(client.editImage).toHaveBeenCalledWith(
       expect.objectContaining({ imageUrls: ["https://r2.example/refs/sister/main.jpg?sig=1", "https://example.com/bg.png"] }),
       expect.anything(),

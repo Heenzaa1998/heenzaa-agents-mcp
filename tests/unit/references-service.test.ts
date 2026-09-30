@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { isStoredKey, mediaInputSchema } from "@/features/media/contracts";
+import { isStoredKey, mediaInputSchema, toStoredKey } from "@/features/media/contracts";
 import { resolveMediaInputs } from "@/features/media/service";
 import { uploadReferenceSchema } from "@/features/references/contracts";
 import type { NewReferenceImage, ReferenceRepository } from "@/features/references/repository";
@@ -43,6 +43,15 @@ describe("media input keys", () => {
     expect(mediaInputSchema.safeParse("https://example.com/a.png").success).toBe(true);
     expect(mediaInputSchema.safeParse("http://example.com/a.png").success).toBe(false);
     expect(mediaInputSchema.safeParse("sister/main").success).toBe(false);
+  });
+
+  it("turns links to our own bucket back into keys and keeps other inputs", () => {
+    expect(toStoredKey("refs/sister/main.jpg")).toBe("refs/sister/main.jpg");
+    expect(
+      toStoredKey("https://abc.r2.cloudflarestorage.com/heenzaa-agents-media/images/66199920-1.png?X-Amz-Expires=604800&X-Amz-Signature=zzz"),
+    ).toBe("images/66199920-1.png");
+    expect(toStoredKey("https://cdn.example.com/photo.png")).toBe("https://cdn.example.com/photo.png");
+    expect(toStoredKey("not a url")).toBe("not a url");
   });
 
   it("presigns keys and passes URLs through", async () => {

@@ -1,0 +1,1 @@
+ALTER TABLE "generations" ADD COLUMN "inputs" jsonb DEFAULT '[]'::jsonb NOT NULL;

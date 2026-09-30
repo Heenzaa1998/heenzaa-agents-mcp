@@ -8,6 +8,7 @@ import {
   setCreditRate,
   summarizeCosts,
   toBaht,
+  sortShots,
 } from "@/features/projects/service";
 import type { GenerationRecord } from "@/server/db/schema";
 
@@ -29,6 +30,7 @@ function take(overrides: Partial<GenerationRecord> = {}): GenerationRecord {
     projectId: 1,
     shot: "Shot 1",
     selected: false,
+    inputs: [],
     createdAt: "2026-09-28 01:00:00+00",
     updatedAt: "2026-09-28 01:00:00+00",
     ...overrides,
@@ -185,5 +187,15 @@ describe("getCostReport", () => {
         getBalance: vi.fn().mockRejectedValue(new Error("down")),
       }),
     ).toBe('No project named "Nope".');
+  });
+});
+
+describe("sortShots", () => {
+  it("orders shot labels naturally with unlabeled work last", () => {
+    const labels = sortShots([
+      { label: "EP01-S10" }, { label: null }, { label: "EP01-S2" }, { label: "ep01-s1" }, { label: "SET-living" },
+    ]).map((shot) => shot.label);
+
+    expect(labels).toEqual(["ep01-s1", "EP01-S2", "EP01-S10", "SET-living", null]);
   });
 });

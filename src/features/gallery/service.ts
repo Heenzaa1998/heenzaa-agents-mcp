@@ -42,6 +42,8 @@ export type GalleryItem = Pick<
   | "projectId"
   | "shot"
   | "selected"
+  | "durationSeconds"
+  | "inputs"
 > & {
   media: GalleryMedia[];
 };
@@ -109,6 +111,8 @@ export async function toGalleryItem(
     projectId: record.projectId,
     shot: record.shot,
     selected: record.selected,
+    durationSeconds: record.durationSeconds,
+    inputs: record.inputs,
     media: await Promise.all(record.media.map((ref) => toGalleryMedia(ref, store))),
   };
 }

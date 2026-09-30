@@ -71,6 +71,7 @@ describe("startVideo", () => {
       status: "pending",
       taskId: "vid_1",
       durationSeconds: 5,
+      inputs: [],
     });
     expect(result).toEqual({
       taskId: "vid_1",
@@ -129,6 +130,8 @@ describe("startVideo with storage keys", () => {
     const client = { startVideo: vi.fn().mockResolvedValue({ taskId: "vid_9", model: "kling-3.0/video" }) };
     const resolve = vi.fn(async (values: string[]) => values.map((v) => (v.startsWith("https://") ? v : `https://r2.example/${v}?sig=1`)));
 
+    const history = makeHistory();
+
     await startVideo(
       {
         prompt: "@khing runs",
@@ -137,10 +140,13 @@ describe("startVideo with storage keys", () => {
         elements: [{ name: "khing", description: "kitten", image_urls: ["refs/kid/front.jpg", "https://x.example/face.jpg"] }],
       },
       client,
-      makeHistory(),
+      history,
       resolve,
     );
 
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({ inputs: ["images/a-1.png", "images/b-1.png", "refs/kid/front.jpg", "https://x.example/face.jpg"] }),
+    );
     expect(client.startVideo).toHaveBeenCalledWith(
       expect.objectContaining({
         imageUrl: "https://r2.example/images/a-1.png?sig=1",

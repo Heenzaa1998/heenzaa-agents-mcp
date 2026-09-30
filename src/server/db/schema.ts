@@ -95,6 +95,9 @@ export const generations = pgTable("generations", {
   projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
   // Free-text shot label inside a project; takes of one shot share it.
   shot: text("shot"),
+  // What the generation was made from: storage keys of source/reference
+  // images (or plain URLs when they were not ours), in the order given.
+  inputs: jsonb("inputs").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   // The take the owner chose to use for its shot.
   selected: boolean("selected").notNull().default(false),
   createdAt: timestamp("created_at", { mode: "string", withTimezone: true })

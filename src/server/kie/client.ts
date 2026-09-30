@@ -20,10 +20,15 @@ export const KLING_3_MODEL = "kling-3.0/video";
 const POLL_TIMEOUT_MS = 240_000;
 const POLL_INTERVAL_MS = 3_000;
 
-export type KieImageResult = {
-  taskId: string;
-  urls: string[];
-  creditsConsumed?: number;
+// KIE keeps working after we stop waiting, so a slow task is reported as
+// pending (with its id) instead of being thrown away.
+export type KieImageResult =
+  | { taskId: string; state: "success"; urls: string[]; creditsConsumed?: number }
+  | { taskId: string; state: "pending" };
+
+export type ImageTaskHooks = {
+  // Called as soon as KIE accepts the task, before waiting for the result.
+  onStarted?: (taskId: string) => Promise<void>;
 };
 
 export type GenerateImageParams = {
@@ -83,8 +88,8 @@ export type KieTaskStatus = {
 };
 
 export type KieClient = {
-  generateImage: (params: GenerateImageParams) => Promise<KieImageResult>;
-  editImage: (params: EditImageParams) => Promise<KieImageResult>;
+  generateImage: (params: GenerateImageParams, hooks?: ImageTaskHooks) => Promise<KieImageResult>;
+  editImage: (params: EditImageParams, hooks?: ImageTaskHooks) => Promise<KieImageResult>;
   startVideo: (params: StartVideoParams) => Promise<{ taskId: string; model: string }>;
   getTask: (taskId: string) => Promise<KieTaskStatus>;
   getBalance: () => Promise<number>;
@@ -237,10 +242,8 @@ function failReasonOf(data: KieTaskData) {
   return [data.failCode, data.failMsg].filter(Boolean).join(" ") || "Unknown failure.";
 }
 
-async function pollTask(
-  apiKey: string,
-  taskId: string,
-): Promise<{ urls: string[]; creditsConsumed?: number }> {
+// Waits for a task until it finishes or the deadline passes.
+async function pollTask(apiKey: string, taskId: string): Promise<KieImageResult> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() <= deadline) {
@@ -248,6 +251,8 @@ async function pollTask(
 
     if (data.state === "success") {
       return {
+        taskId,
+        state: "success",
         urls: parseResultUrls(data.resultJson),
         creditsConsumed: data.creditsConsumed,
       };
@@ -263,25 +268,36 @@ async function pollTask(
     await sleep(POLL_INTERVAL_MS);
   }
 
-  throw new AppError(
-    `KIE task timed out after ${POLL_TIMEOUT_MS / 1000}s.`,
-    { code: "kie_task_timeout", statusCode: 504 },
-  );
+  return { taskId, state: "pending" };
 }
 
 async function runJob(
   model: string,
   input: Record<string, unknown>,
+  hooks?: ImageTaskHooks,
 ): Promise<KieImageResult> {
   const apiKey = requireApiKey();
   const taskId = await createTask(apiKey, model, input);
-  const { urls, creditsConsumed } = await pollTask(apiKey, taskId);
 
-  return { taskId, urls, creditsConsumed };
+  await hooks?.onStarted?.(taskId);
+
+  return pollTask(apiKey, taskId);
+}
+
+function noteResult(span: { setAttribute: (key: string, value: string | number) => unknown }, result: KieImageResult) {
+  span.setAttribute("kie.task.state", result.state);
+
+  if (result.state === "success") {
+    span.setAttribute("kie.result.count", result.urls.length);
+
+    if (typeof result.creditsConsumed === "number") {
+      span.setAttribute("kie.credits_consumed", result.creditsConsumed);
+    }
+  }
 }
 
 export const kieClient: KieClient = {
-  generateImage(params) {
+  generateImage(params, hooks) {
     return withSpan(
       "kie.generate_image",
       {
@@ -305,20 +321,16 @@ export const kieClient: KieClient = {
           input.background = params.background;
         }
 
-        const result = await runJob(TEXT_TO_IMAGE_MODEL, input);
+        const result = await runJob(TEXT_TO_IMAGE_MODEL, input, hooks);
 
-        span.setAttribute("kie.result.count", result.urls.length);
-
-        if (typeof result.creditsConsumed === "number") {
-          span.setAttribute("kie.credits_consumed", result.creditsConsumed);
-        }
+        noteResult(span, result);
 
         return result;
       },
     );
   },
 
-  editImage(params) {
+  editImage(params, hooks) {
     const model =
       params.model === "gpt-image-2" ? IMAGE_TO_IMAGE_MODEL : LEGACY_IMAGE_TO_IMAGE_MODEL;
 
@@ -350,14 +362,10 @@ export const kieClient: KieClient = {
           input.quality = params.quality;
         }
 
-        const result = await runJob(model, input);
+        const result = await runJob(model, input, hooks);
 
         span.setAttribute("kie.input.count", params.imageUrls.length);
-        span.setAttribute("kie.result.count", result.urls.length);
-
-        if (typeof result.creditsConsumed === "number") {
-          span.setAttribute("kie.credits_consumed", result.creditsConsumed);
-        }
+        noteResult(span, result);
 
         return result;
       },

@@ -44,6 +44,12 @@ function describeItem(item: MediaItem, index: number) {
 }
 
 function toToolResult(result: ImageGenerationResult) {
+  if (result.pending) {
+    return textResult(
+      `KIE is still working on this image (it can take a few minutes when the queue is busy). task_id: ${result.taskId}\nCall get_task_status with this task_id to get the download link; the credits are only charged once.`,
+    );
+  }
+
   const text = [
     `Generated ${result.media.length} image(s):`,
     ...result.media.map(describeItem),
@@ -188,7 +194,7 @@ const mcpHandler = createMcpHandler(
       {
         title: "Check a generation task",
         description:
-          "Check a task started by generate_video. While running it reports progress; once finished it saves the file to storage and returns a download link plus a storage key.",
+          "Check a task started by generate_video, or an image task that generate_image/edit_image reported as still running. While running it reports progress; once finished it saves the file to storage and returns a download link plus a storage key.",
         inputSchema: getTaskStatusSchema,
       },
       async (args) => {

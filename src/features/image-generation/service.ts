@@ -19,9 +19,12 @@ import {
   LEGACY_IMAGE_TO_IMAGE_MODEL,
   TEXT_TO_IMAGE_MODEL,
   type EditImageParams,
+  type ImageTaskHooks,
   type KieClient,
+  type KieImageResult,
 } from "@/server/kie/client";
 import { logger } from "@/server/logger";
+import type { Span } from "@opentelemetry/api";
 import { withSpan } from "@/server/observability/tracing";
 
 type ImageGenerator = Pick<KieClient, "generateImage">;
@@ -30,15 +33,80 @@ type MediaPersister = (
   urls: string[],
   options: PersistOptions,
 ) => Promise<MediaItem[]>;
-type HistoryWriter = Pick<GenerationLog, "record">;
+type HistoryWriter = Pick<GenerationLog, "record" | "finish">;
 
 export type ImageGenerationResult = {
   taskId: string;
   media: MediaItem[];
+  // True when KIE was still working after we stopped waiting; the media is
+  // empty and get_task_status finishes the job later.
+  pending: boolean;
+};
+
+type HistoryEntry = {
+  kind: "image";
+  operation: string;
+  model: string;
+  prompt: string;
+  project?: string;
+  shot?: string;
 };
 
 function countStored(media: MediaItem[]) {
   return media.filter((item) => item.key !== null).length;
+}
+
+// Shared tail of generate/edit: record the task as soon as KIE accepts it,
+// then close it with the outcome. A task that outlives the wait stays pending.
+async function runImageJob(
+  entry: HistoryEntry,
+  start: (hooks: ImageTaskHooks) => Promise<KieImageResult>,
+  persist: MediaPersister,
+  history: HistoryWriter,
+  span: Span,
+): Promise<ImageGenerationResult> {
+  let started: string | null = null;
+  let result: KieImageResult;
+
+  try {
+    result = await start({
+      onStarted: async (taskId) => {
+        started = taskId;
+        await history.record({ ...entry, status: "pending", taskId });
+      },
+    });
+  } catch (error) {
+    if (started) {
+      await history.finish(started, { status: "fail", error: describeError(error) });
+    } else {
+      await history.record({ ...entry, status: "fail", taskId: null, error: describeError(error) });
+    }
+    throw error;
+  }
+
+  if (result.state === "pending") {
+    span.setAttribute("app.image.pending", true);
+    logger.info({ operation: entry.operation, task_id: result.taskId }, "Image task still running");
+
+    return { taskId: result.taskId, media: [], pending: true };
+  }
+
+  const media = await persist(result.urls, { prefix: "images", taskId: result.taskId });
+
+  await history.finish(result.taskId, {
+    status: "success",
+    media: toMediaRefs(media),
+    ...(result.creditsConsumed !== undefined ? { credits: result.creditsConsumed } : {}),
+  });
+
+  span.setAttribute("app.image.result_count", media.length);
+  span.setAttribute("app.image.stored_count", countStored(media));
+  logger.info(
+    { operation: entry.operation, result_count: media.length, stored_count: countStored(media) },
+    entry.operation === "edit_image" ? "Image edited" : "Image generated",
+  );
+
+  return { taskId: result.taskId, media, pending: false };
 }
 
 export async function generateImage(
@@ -69,51 +137,22 @@ export async function generateImage(
       span.setAttribute("app.image.aspect_ratio", parsed.aspect_ratio);
       span.setAttribute("app.image.resolution", parsed.resolution);
 
-      let result;
-
-      try {
-        result = await client.generateImage({
-          prompt: parsed.prompt,
-          aspectRatio: parsed.aspect_ratio,
-          resolution: parsed.resolution,
-          background: parsed.background,
-        });
-      } catch (error) {
-        await history.record({
-          ...entry,
-          status: "fail",
-          taskId: null,
-          error: describeError(error),
-        });
-        throw error;
-      }
-
-      const media = await persist(result.urls, {
-        prefix: "images",
-        taskId: result.taskId,
-      });
-
-      await history.record({
-        ...entry,
-        status: "success",
-        taskId: result.taskId,
-        media: toMediaRefs(media),
-        credits: result.creditsConsumed ?? null,
-      });
-
-      span.setAttribute("app.image.result_count", media.length);
-      span.setAttribute("app.image.stored_count", countStored(media));
-
-      logger.info(
-        {
-          operation: "generate_image",
-          result_count: media.length,
-          stored_count: countStored(media),
-        },
-        "Image generated",
+      return runImageJob(
+        entry,
+        (hooks) =>
+          client.generateImage(
+            {
+              prompt: parsed.prompt,
+              aspectRatio: parsed.aspect_ratio,
+              resolution: parsed.resolution,
+              background: parsed.background,
+            },
+            hooks,
+          ),
+        persist,
+        history,
+        span,
       );
-
-      return { taskId: result.taskId, media };
     },
   );
 }
@@ -165,46 +204,7 @@ export async function editImage(
       span.setAttribute("app.image.aspect_ratio", params.aspectRatio);
       span.setAttribute("app.image.input_count", parsed.image_urls.length);
 
-      let result;
-
-      try {
-        result = await client.editImage(params);
-      } catch (error) {
-        await history.record({
-          ...entry,
-          status: "fail",
-          taskId: null,
-          error: describeError(error),
-        });
-        throw error;
-      }
-
-      const media = await persist(result.urls, {
-        prefix: "images",
-        taskId: result.taskId,
-      });
-
-      await history.record({
-        ...entry,
-        status: "success",
-        taskId: result.taskId,
-        media: toMediaRefs(media),
-        credits: result.creditsConsumed ?? null,
-      });
-
-      span.setAttribute("app.image.result_count", media.length);
-      span.setAttribute("app.image.stored_count", countStored(media));
-
-      logger.info(
-        {
-          operation: "edit_image",
-          result_count: media.length,
-          stored_count: countStored(media),
-        },
-        "Image edited",
-      );
-
-      return { taskId: result.taskId, media };
+      return runImageJob(entry, (hooks) => client.editImage(params, hooks), persist, history, span);
     },
   );
 }

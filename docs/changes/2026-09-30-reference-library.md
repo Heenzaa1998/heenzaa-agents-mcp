@@ -39,7 +39,7 @@
 
 - [x] `pnpm check` — lint + typecheck + test ผ่าน (159/159)
 - [ ] `pnpm e2e` — ไม่รัน (DB ร่วมกับ production)
-- [ ] production: อัปโหลด character sheet + ฉากด้วยสคริปต์ แล้ว `list_references` เห็นครบ (เติมหลัง deploy)
+- [x] production (`d3ef2f0`): อัปโหลด character sheet 5 ตัว + ฉาก 2 ภาพด้วย `upload_ref.py` (JPEG ≤2048px ผ่าน base64) แล้ว `list_references` เห็นครบ 7 รายการ; `get_media_url` กับ `refs/sister/main.jpg` ได้ลิงก์; `edit_image` กับ key ที่ไม่มีไฟล์ได้ `media_not_found` โดยไม่ใช้เครดิต
 
 ## ตามมาทีหลัง
 

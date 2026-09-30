@@ -4,9 +4,25 @@ export const MEDIA_PREFIXES = ["images", "videos"] as const;
 
 export type MediaPrefix = (typeof MEDIA_PREFIXES)[number];
 
-// The server generates keys as `<prefix>/<taskId>-<n>.<ext>`; anything else is
-// rejected so callers cannot presign arbitrary objects in the bucket.
-export const MEDIA_KEY_PATTERN = /^(images|videos)\/[A-Za-z0-9_-]+\.[a-z0-9]+$/;
+// Keys are either generated results (`<prefix>/<taskId>-<n>.<ext>`) or named
+// references (`refs/<name>.<ext>`); anything else is rejected so callers
+// cannot presign arbitrary objects in the bucket.
+export const MEDIA_KEY_PATTERN =
+  /^(?:(?:images|videos)\/[A-Za-z0-9_-]+|refs\/[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*)\.[a-z0-9]+$/;
+
+export function isStoredKey(value: string) {
+  return MEDIA_KEY_PATTERN.test(value);
+}
+
+// An image input for a tool: a public https URL, or a storage key of a stored
+// result / uploaded reference, which the server turns into a link itself.
+export const mediaInputSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => isStoredKey(value) || /^https:\/\/\S+$/.test(value),
+    "Give an https URL or a storage key such as refs/sister/main.jpg or images/<taskId>-1.png.",
+  );
 
 export const getMediaUrlSchema = z.object({
   key: z
@@ -14,7 +30,7 @@ export const getMediaUrlSchema = z.object({
     .trim()
     .regex(MEDIA_KEY_PATTERN, "Unknown media key.")
     .describe(
-      "Storage key returned by generate_image or edit_image, e.g. images/<taskId>-1.png.",
+      "Storage key of a result (images/<taskId>-1.png, videos/...) or an uploaded reference (refs/<name>.<ext>).",
     ),
 });
 

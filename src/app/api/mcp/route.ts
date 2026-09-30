@@ -14,6 +14,8 @@ import { getMediaUrlSchema } from "@/features/media/contracts";
 import { getMediaUrl, type MediaItem } from "@/features/media/service";
 import { getCostsSchema } from "@/features/projects/contracts";
 import { getCostReport } from "@/features/projects/service";
+import { listReferencesSchema, uploadReferenceSchema } from "@/features/references/contracts";
+import { listReferences, uploadReference, type ReferenceItem } from "@/features/references/service";
 import {
   generateVideoSchema,
   getTaskStatusSchema,
@@ -88,6 +90,10 @@ function describeGeneration(record: GenerationRecord) {
   return lines.join("\n");
 }
 
+function describeReference(item: ReferenceItem) {
+  return `${item.name}\n   key: ${item.key} · ${item.width}×${item.height} · ${Math.round(item.bytes / 1024)} KB · link (valid ${Math.round(item.expiresInSeconds / 86_400)} days): ${item.url}`;
+}
+
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
@@ -130,7 +136,7 @@ const mcpHandler = createMcpHandler(
       {
         title: "Edit image (GPT Image)",
         description:
-          "Edit or restyle existing image(s) from URL(s) with a text instruction. To iterate on a previous result, pass its link (call get_media_url first if the link has expired).",
+          "Edit or restyle existing image(s) with a text instruction. Inputs are https URLs or storage keys (refs/<name>.<ext> from upload_reference, images/<taskId>-1.png from a previous result), so no fresh link is needed.",
         inputSchema: editImageSchema,
       },
       async (args) => {
@@ -138,6 +144,48 @@ const mcpHandler = createMcpHandler(
           return toToolResult(await editImage(args));
         } catch (error) {
           return toErrorResult(error, "Image generation failed.");
+        }
+      },
+    );
+
+    server.registerTool(
+      "upload_reference",
+      {
+        title: "Upload a reference image",
+        description:
+          "Store an image under a name (e.g. sister/main) so later calls can use it by storage key instead of a URL: pass refs/<name>.<ext> to edit_image image_urls or generate_video image_url/elements. Source is one of url, key (a saved result) or data_base64. Same name replaces the old file.",
+        inputSchema: uploadReferenceSchema,
+      },
+      async (args) => {
+        try {
+          const item = await uploadReference(args);
+
+          return textResult(`Stored reference ${describeReference(item)}\nUse the key ${item.key} in edit_image or generate_video.`);
+        } catch (error) {
+          return toErrorResult(error, "Could not store the reference.");
+        }
+      },
+    );
+
+    server.registerTool(
+      "list_references",
+      {
+        title: "List reference images",
+        description:
+          "List uploaded reference images (character sheets, sets) with their storage keys, newest first. Optionally only one project's.",
+        inputSchema: listReferencesSchema,
+      },
+      async (args) => {
+        try {
+          const items = await listReferences(args);
+
+          return textResult(
+            items.length === 0
+              ? "No references yet. Use upload_reference to add one."
+              : [`${items.length} reference(s):`, ...items.map((item, index) => `${index + 1}. ${describeReference(item)}`)].join("\n"),
+          );
+        } catch (error) {
+          return toErrorResult(error, "Could not list references.");
         }
       },
     );

@@ -53,6 +53,27 @@ export const settings = pgTable("settings", {
     .defaultNow(),
 });
 
+// Images uploaded once and reused by name in later generations, e.g. a
+// character sheet. The file lives in R2 under `refs/<name>.<ext>`.
+export const referenceImages = pgTable("reference_images", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  key: text("key").notNull(),
+  contentType: text("content_type").notNull(),
+  bytes: integer("bytes").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ReferenceImageRecord = typeof referenceImages.$inferSelect;
+
 export const generations = pgTable("generations", {
   id: serial("id").primaryKey(),
   kind: text("kind", { enum: ["image", "video"] }).notNull(),

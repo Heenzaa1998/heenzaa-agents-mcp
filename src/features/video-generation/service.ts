@@ -6,7 +6,9 @@ import {
 } from "@/features/generations/service";
 import {
   persistRemoteMedia,
+  resolveMediaInputs,
   type MediaItem,
+  type MediaResolver,
   type PersistOptions,
 } from "@/features/media/service";
 import {
@@ -48,6 +50,7 @@ export async function startVideo(
   input: unknown,
   client: VideoStarter = kieClient,
   history: Pick<GenerationLog, "record"> = generationLog,
+  resolve: MediaResolver = resolveMediaInputs,
 ): Promise<StartVideoResult> {
   return withSpan(
     "video-generation.start",
@@ -68,22 +71,31 @@ export async function startVideo(
         durationSeconds: Number(parsed.duration),
       };
 
+      // Storage keys become presigned links before KIE sees them.
+      const [imageUrl] = parsed.image_url ? await resolve([parsed.image_url]) : [undefined];
+      const [endImageUrl] = parsed.end_image_url ? await resolve([parsed.end_image_url]) : [undefined];
+      const elements = parsed.elements
+        ? await Promise.all(
+            parsed.elements.map(async (element) => ({
+              name: element.name,
+              description: element.description,
+              imageUrls: await resolve(element.image_urls),
+            })),
+          )
+        : undefined;
+
       const params: StartVideoParams = {
         model: parsed.model,
         prompt: parsed.prompt,
-        imageUrl: parsed.image_url,
+        imageUrl,
         aspectRatio: parsed.aspect_ratio,
         duration: parsed.duration,
         sound: parsed.sound,
         ...(parsed.model === "kling-3.0"
           ? {
               mode: parsed.mode,
-              endImageUrl: parsed.end_image_url,
-              elements: parsed.elements?.map((element) => ({
-                name: element.name,
-                description: element.description,
-                imageUrls: element.image_urls,
-              })),
+              endImageUrl,
+              elements,
             }
           : {}),
       };

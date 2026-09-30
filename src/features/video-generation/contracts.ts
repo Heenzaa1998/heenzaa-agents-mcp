@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mediaInputSchema } from "@/features/media/contracts";
 import { workTagShape } from "@/features/projects/contracts";
 
 // Allowed values mirror the KIE.ai Kling 2.6 and 3.0 model docs.
@@ -23,11 +24,11 @@ const elementSchema = z.object({
     .max(200)
     .describe("Short description of the character or object."),
   image_urls: z
-    .array(z.string().url())
+    .array(mediaInputSchema)
     .min(2, "Kling 3.0 needs 2 to 4 reference images per element.")
     .max(4, "Kling 3.0 needs 2 to 4 reference images per element.")
     .describe(
-      "2–4 reference images of this element, each no wider or taller than 2.5:1 (e.g. front view, three-quarter view, face close-up cut from a character sheet).",
+      "2–4 reference images of this element (https URLs or storage keys), each no wider or taller than 2.5:1 (e.g. front view, three-quarter view, face close-up cut from a character sheet).",
     ),
 });
 
@@ -45,18 +46,14 @@ export const generateVideoSchema = z
       .describe(
         "kling-3.0 (default): better character consistency and prompt following, 3–15s, elements, end frame. kling-2.6: cheaper per clip, 5 or 10s only.",
       ),
-    image_url: z
-      .string()
-      .url()
+    image_url: mediaInputSchema
       .optional()
       .describe(
-        "Optional first frame to animate (JPEG/PNG, max 10MB). A link returned by generate_image or edit_image works. The clip takes the image's aspect ratio.",
+        "Optional first frame to animate (JPEG/PNG, max 10MB): an https URL or a storage key such as images/<taskId>-1.png or refs/<name>.<ext>. The clip takes the image's aspect ratio.",
       ),
-    end_image_url: z
-      .string()
-      .url()
+    end_image_url: mediaInputSchema
       .optional()
-      .describe("kling-3.0 only: optional last frame; needs image_url."),
+      .describe("kling-3.0 only: optional last frame (URL or storage key); needs image_url."),
     aspect_ratio: z
       .enum(VIDEO_ASPECT_RATIOS)
       .default("16:9")

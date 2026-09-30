@@ -10,7 +10,9 @@ import {
 } from "@/features/generations/service";
 import {
   persistRemoteMedia,
+  resolveMediaInputs,
   type MediaItem,
+  type MediaResolver,
   type PersistOptions,
 } from "@/features/media/service";
 import {
@@ -162,6 +164,7 @@ export async function editImage(
   client: ImageEditor = kieClient,
   persist: MediaPersister = persistRemoteMedia,
   history: HistoryWriter = generationLog,
+  resolve: MediaResolver = resolveMediaInputs,
 ): Promise<ImageGenerationResult> {
   return withSpan(
     "image-generation.edit",
@@ -183,7 +186,8 @@ export async function editImage(
         shot: parsed.shot,
       };
 
-      const shared = { prompt: parsed.prompt, imageUrls: parsed.image_urls };
+      // Storage keys become presigned links before KIE sees them.
+      const shared = { prompt: parsed.prompt, imageUrls: await resolve(parsed.image_urls) };
       const params: EditImageParams = legacy
         ? {
             ...shared,

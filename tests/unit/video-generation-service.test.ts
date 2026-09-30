@@ -124,6 +124,33 @@ describe("startVideo", () => {
   });
 });
 
+describe("startVideo with storage keys", () => {
+  it("resolves first/last frames and element images before calling KIE", async () => {
+    const client = { startVideo: vi.fn().mockResolvedValue({ taskId: "vid_9", model: "kling-3.0/video" }) };
+    const resolve = vi.fn(async (values: string[]) => values.map((v) => (v.startsWith("https://") ? v : `https://r2.example/${v}?sig=1`)));
+
+    await startVideo(
+      {
+        prompt: "@khing runs",
+        image_url: "images/a-1.png",
+        end_image_url: "images/b-1.png",
+        elements: [{ name: "khing", description: "kitten", image_urls: ["refs/kid/front.jpg", "https://x.example/face.jpg"] }],
+      },
+      client,
+      makeHistory(),
+      resolve,
+    );
+
+    expect(client.startVideo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageUrl: "https://r2.example/images/a-1.png?sig=1",
+        endImageUrl: "https://r2.example/images/b-1.png?sig=1",
+        elements: [{ name: "khing", description: "kitten", imageUrls: ["https://r2.example/refs/kid/front.jpg?sig=1", "https://x.example/face.jpg"] }],
+      }),
+    );
+  });
+});
+
 describe("getTaskStatus", () => {
   it("reports progress without persisting or recording while the task runs", async () => {
     const client = {

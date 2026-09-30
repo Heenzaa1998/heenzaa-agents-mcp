@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mediaInputSchema } from "@/features/media/contracts";
 import { workTagShape } from "@/features/projects/contracts";
 
 // Allowed values mirror the KIE.ai GPT Image model docs.
@@ -95,11 +96,11 @@ export const editImageSchema = z
   .object({
     prompt: promptField("How to edit or restyle the input image(s)."),
     image_urls: z
-      .array(z.string().url())
-      .min(1, "At least one image URL is required.")
-      .max(16, "At most 16 image URLs are allowed.")
+      .array(mediaInputSchema)
+      .min(1, "At least one image is required.")
+      .max(16, "At most 16 images are allowed.")
       .describe(
-        "Public https URL(s) of the source/reference image(s), e.g. a character sheet plus a background. Pass a previous result URL to iterate.",
+        "Source/reference image(s): public https URLs or storage keys (refs/<name>.<ext> from upload_reference, images/<taskId>-1.png from a previous result). E.g. a character sheet plus a background.",
       ),
     model: z
       .enum(EDIT_MODELS)

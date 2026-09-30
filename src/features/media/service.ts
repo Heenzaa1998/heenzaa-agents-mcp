@@ -1,4 +1,4 @@
-import { getMediaUrlSchema, type MediaPrefix } from "@/features/media/contracts";
+import { getMediaUrlSchema, isStoredKey, type MediaPrefix } from "@/features/media/contracts";
 import { AppError } from "@/server/errors/app-error";
 import { logger } from "@/server/logger";
 import { withSpan } from "@/server/observability/tracing";
@@ -220,3 +220,36 @@ export async function getMediaUrl(
     },
   );
 }
+
+// Turns tool inputs that are storage keys into presigned links, leaving URLs
+// as they are, so KIE can fetch them.
+export async function resolveMediaInputs(
+  values: string[],
+  store: MediaStore = mediaStore,
+): Promise<string[]> {
+  return Promise.all(
+    values.map(async (value) => {
+      if (!isStoredKey(value)) {
+        return value;
+      }
+
+      if (!store.enabled) {
+        throw new AppError("Storage keys need R2 storage, which is not configured on the server.", {
+          code: "storage_not_configured",
+          statusCode: 503,
+        });
+      }
+
+      if (!(await store.exists(value))) {
+        throw new AppError(`No stored file with key ${value}.`, {
+          code: "media_not_found",
+          statusCode: 404,
+        });
+      }
+
+      return store.presign(value);
+    }),
+  );
+}
+
+export type MediaResolver = (values: string[]) => Promise<string[]>;

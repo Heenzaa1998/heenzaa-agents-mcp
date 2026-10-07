@@ -18,6 +18,25 @@ function makeStore(overrides: Partial<MediaStore> = {}): MediaStore {
   };
 }
 
+// ftyp + moov > mvhd (version 0), the smallest file the MP4 reader accepts.
+function tinyMp4(timescale: number, duration: number) {
+  const bytes = new Uint8Array(20 + 116);
+  const view = new DataView(bytes.buffer);
+  const tag = (offset: number, type: string) => bytes.set(new TextEncoder().encode(type), offset);
+
+  view.setUint32(0, 20);
+  tag(4, "ftyp");
+  tag(8, "isomiso2mp41");
+  view.setUint32(20, 116);
+  tag(24, "moov");
+  view.setUint32(28, 108);
+  tag(32, "mvhd");
+  view.setUint32(36 + 12, timescale);
+  view.setUint32(36 + 16, duration);
+
+  return bytes;
+}
+
 describe("persistRemoteMedia", () => {
   it("returns provider URLs untouched when storage is disabled", async () => {
     const store = makeStore({ enabled: false });
@@ -115,6 +134,36 @@ describe("persistRemoteMedia", () => {
     );
 
     expect(thumbnailer).not.toHaveBeenCalled();
+  });
+
+  it("reads the length of a new video from its MP4 header", async () => {
+    const store = makeStore();
+    const fetchFn = vi.fn().mockResolvedValue(new Response(tinyMp4(1000, 4600), { status: 200 }));
+
+    const items = await persistRemoteMedia(
+      ["https://kie.example/clip.mp4"],
+      { prefix: "videos", taskId: "ava_1" },
+      store,
+      fetchFn,
+    );
+
+    expect(store.put).toHaveBeenCalledWith("videos/ava_1-1.mp4", expect.anything(), "video/mp4");
+    expect(items[0]).toMatchObject({ key: "videos/ava_1-1.mp4", durationSeconds: 4.6 });
+  });
+
+  it("leaves the length out when the video header cannot be read", async () => {
+    const store = makeStore();
+    const fetchFn = vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 }));
+
+    const items = await persistRemoteMedia(
+      ["https://kie.example/clip.mp4"],
+      { prefix: "videos", taskId: "vid_1" },
+      store,
+      fetchFn,
+    );
+
+    expect(items[0]?.key).toBe("videos/vid_1-1.mp4");
+    expect(items[0]).not.toHaveProperty("durationSeconds");
   });
 
   it("skips the upload when the object already exists", async () => {

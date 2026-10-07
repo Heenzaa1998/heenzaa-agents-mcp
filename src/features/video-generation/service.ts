@@ -42,6 +42,13 @@ export type StartVideoResult = {
   duration: string;
 };
 
+// Whole seconds for the history (the column is an integer, at least 1).
+function measuredSeconds(media: MediaItem[]) {
+  const seconds = media.find((item) => item.durationSeconds !== undefined)?.durationSeconds;
+
+  return seconds === undefined ? undefined : Math.max(1, Math.round(seconds));
+}
+
 export type TaskStatusResult = {
   taskId: string;
   model: string;
@@ -262,10 +269,16 @@ export async function getTaskStatus(
           taskId: status.taskId,
         });
 
+        // Kling clips were recorded with the length they asked for. A talking
+        // video is as long as its audio, so its length comes from the file.
+        const durationSeconds =
+          status.durationSeconds === undefined ? measuredSeconds(result.media) : undefined;
+
         await history.finish(status.taskId, {
           status: "success",
           media: toMediaRefs(result.media),
           ...(status.creditsConsumed !== undefined ? { credits: status.creditsConsumed } : {}),
+          ...(durationSeconds !== undefined ? { durationSeconds } : {}),
         });
       }
 

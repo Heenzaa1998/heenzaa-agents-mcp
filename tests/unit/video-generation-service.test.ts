@@ -233,6 +233,75 @@ describe("getTaskStatus", () => {
     });
   });
 
+  it("records the length read from a finished talking video", async () => {
+    const client = {
+      getTask: vi.fn().mockResolvedValue({
+        taskId: "ava_2",
+        model: "kling/ai-avatar-standard",
+        state: "success",
+        urls: ["https://kie.example/a.mp4"],
+        creditsConsumed: 40,
+      }),
+    };
+    const persist = vi.fn().mockResolvedValue([
+      {
+        url: "https://r2.example/videos/ava_2-1.mp4?sig=1",
+        key: "videos/ava_2-1.mp4",
+        expiresInSeconds: 604800,
+        durationSeconds: 4.6,
+      },
+    ]);
+    const history = makeHistory();
+
+    await getTaskStatus({ task_id: "ava_2" }, client, persist, history);
+
+    expect(history.finish).toHaveBeenCalledWith("ava_2", {
+      status: "success",
+      media: [{ key: "videos/ava_2-1.mp4" }],
+      credits: 40,
+      durationSeconds: 5,
+    });
+  });
+
+  it("records at least one second for a very short talking video", async () => {
+    const client = {
+      getTask: vi.fn().mockResolvedValue({
+        taskId: "ava_3",
+        model: "kling/ai-avatar-pro",
+        state: "success",
+        urls: ["https://kie.example/a.mp4"],
+      }),
+    };
+    const persist = vi
+      .fn()
+      .mockResolvedValue([{ url: "u", key: "videos/ava_3-1.mp4", expiresInSeconds: 1, durationSeconds: 0.3 }]);
+    const history = makeHistory();
+
+    await getTaskStatus({ task_id: "ava_3" }, client, persist, history);
+
+    expect(history.finish).toHaveBeenCalledWith("ava_3", expect.objectContaining({ durationSeconds: 1 }));
+  });
+
+  it("keeps the requested length of a Kling clip", async () => {
+    const client = {
+      getTask: vi.fn().mockResolvedValue({
+        taskId: "vid_5",
+        model: "kling-3.0/video",
+        state: "success",
+        urls: ["https://kie.example/v.mp4"],
+        durationSeconds: 5,
+      }),
+    };
+    const persist = vi
+      .fn()
+      .mockResolvedValue([{ url: "u", key: "videos/vid_5-1.mp4", expiresInSeconds: 1, durationSeconds: 5.04 }]);
+    const history = makeHistory();
+
+    await getTaskStatus({ task_id: "vid_5" }, client, persist, history);
+
+    expect(history.finish.mock.calls[0]?.[1]).not.toHaveProperty("durationSeconds");
+  });
+
   it("uses the images prefix for a finished image task", async () => {
     const client = {
       getTask: vi.fn().mockResolvedValue({

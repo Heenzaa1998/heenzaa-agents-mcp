@@ -2,6 +2,7 @@ import { getMediaUrlSchema, isStoredKey, type MediaPrefix } from "@/features/med
 import { AppError } from "@/server/errors/app-error";
 import { logger } from "@/server/logger";
 import { withSpan } from "@/server/observability/tracing";
+import { readMp4DurationSeconds } from "@/server/storage/mp4";
 import {
   mediaStore,
   PRESIGN_TTL_SECONDS,
@@ -17,6 +18,9 @@ export type MediaItem = {
   expiresInSeconds: number | null;
   // Set when a small WebP preview was stored alongside an image.
   thumbKey?: string;
+  // Length of a video downloaded by this call, read from its MP4 header.
+  // Absent when the file was already stored or the header is unreadable.
+  durationSeconds?: number;
 };
 
 export type PersistOptions = {
@@ -96,6 +100,7 @@ async function persistOne(
   const extension = extensionOf(url, options.prefix);
   const key = buildMediaKey(options.prefix, options.taskId, index, extension);
   let thumbKey: string | undefined;
+  let durationSeconds: number | undefined;
 
   try {
     // Deterministic keys make this idempotent: a retried or re-polled task
@@ -121,6 +126,8 @@ async function persistOne(
 
       if (options.prefix === "images") {
         thumbKey = await storeThumbnail(key, bytes, store, thumbnailer);
+      } else {
+        durationSeconds = readMp4DurationSeconds(bytes);
       }
     }
 
@@ -129,6 +136,7 @@ async function persistOne(
       key,
       expiresInSeconds: PRESIGN_TTL_SECONDS,
       ...(thumbKey ? { thumbKey } : {}),
+      ...(durationSeconds !== undefined ? { durationSeconds } : {}),
     };
   } catch (error) {
     // The user already paid for the generation, so fall back to the

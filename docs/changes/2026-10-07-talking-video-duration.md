@@ -2,7 +2,7 @@
 
 - **วันที่:** 2026-10-07
 - **Design doc:** `docs/design/2026-10-07-talking-video-duration.md`
-- **Commit / PR:** branch `ccr-2e2a9845-ltgqis`
+- **Commit / PR:** branch `ccr-2e2a9845-ltgqis` merge แบบ fast-forward เข้า `main` ตามที่เจ้าของ repo สั่ง (ไม่เปิด PR)
 
 ## เปลี่ยนอะไร
 

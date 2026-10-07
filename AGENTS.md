@@ -5,7 +5,10 @@ This file is the authoritative rulebook for this repository.
 
 ## Purpose
 
-This repository is a lean, production-ready Next.js App Router starter with:
+This repository is Heenzaa Studio: an MCP server (`/api/mcp`) that generates images and
+video through KIE.ai, stores results in a private R2 bucket, and serves a private gallery
+and cost pages. `README.md` describes the tools and setup. It was built on a lean,
+production-ready Next.js App Router starter with:
 
 - `pnpm`
 - Tailwind CSS v4 + shadcn/ui
@@ -122,6 +125,9 @@ tests/
   Pages read the language with `getDictionary()` from `src/server/i18n.ts`.
 - Do not letter-space Thai text. Use the `.eyebrow` class for small uppercase labels; it
   drops the tracking on Thai pages.
+- `toolNames` in `src/content/site.ts` must list every tool registered in
+  `src/app/api/mcp/route.ts`, with copy in both dictionaries. `tests/unit/home-page.test.tsx`
+  fails when they drift.
 - Language-independent data (brand name, tool names, showcase images) lives in
   `src/content/site.ts`. Showcase art in `public/showcase/` is public on purpose and must
   never be the owner's private generations.

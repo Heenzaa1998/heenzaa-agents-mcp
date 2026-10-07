@@ -2,11 +2,16 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
+  AudioLines,
   Check,
+  Coins,
   Film,
   History,
+  Hourglass,
   ImageIcon,
+  ImageUp,
   KeyRound,
+  Library,
   MessageSquareText,
   Plug,
   Route as RouteIcon,
@@ -22,11 +27,19 @@ import { cn } from "@/lib/utils";
 const toolIcons: Record<ToolName, typeof ImageIcon> = {
   edit_image: Sparkles,
   generate_image: ImageIcon,
+  generate_talking_video: AudioLines,
   generate_video: Film,
+  get_costs: Coins,
   get_media_url: KeyRound,
-  get_task_status: Film,
+  get_task_status: Hourglass,
   list_generations: History,
+  list_references: Library,
+  upload_reference: ImageUp,
 };
+
+// The featured card spans three rows with the next three tools stacked beside
+// it; the rest sit three to a row.
+const FEATURE_ROWS = 3;
 
 const stepIcons = [MessageSquareText, RouteIcon, Sparkles, Vault];
 
@@ -174,7 +187,7 @@ export function HomeView({ dict }: { dict: Dictionary }) {
       <Marquee images={showcase} label={home.madeHere} />
 
       <section className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 sm:px-6 lg:px-8" id="tools">
-        <SectionHeading eyebrow={home.toolsEyebrow} title={home.toolsTitle} />
+        <SectionHeading eyebrow={home.toolsEyebrow} title={home.toolsTitle(toolNames.length)} />
         <div className="grid gap-4 md:grid-cols-6">
           {toolNames.map((name, index) => {
             const tool = home.tools[name];
@@ -185,9 +198,9 @@ export function HomeView({ dict }: { dict: Dictionary }) {
               <div
                 className={cn(
                   "group relative flex flex-col justify-end gap-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-card/70 p-6 transition-colors hover:border-primary/40",
-                  isFeature && "min-h-80 md:col-span-3 md:row-span-2",
-                  (index === 1 || index === 2) && "md:col-span-3",
-                  index > 2 && "md:col-span-2",
+                  isFeature && "min-h-80 md:col-span-3 md:row-span-3",
+                  index > 0 && index <= FEATURE_ROWS && "md:col-span-3",
+                  index > FEATURE_ROWS && "md:col-span-2",
                 )}
                 key={name}
               >

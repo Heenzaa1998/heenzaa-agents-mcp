@@ -158,7 +158,7 @@ const mcpHandler = createMcpHandler(
       {
         title: "Upload a reference image",
         description:
-          "Store an image under a name (e.g. sister/main) so later calls can use it by storage key instead of a URL: pass refs/<name>.<ext> to edit_image image_urls or generate_video image_url/elements. Source is one of url, key (a saved result) or data_base64. Same name replaces the old file.",
+          "Store an image under a name (e.g. sister/main) so later calls can use it by storage key instead of a URL: pass refs/<name>.<ext> to edit_image image_urls, generate_video image_url/elements or generate_talking_video image_url. Source is one of url, key (a saved result) or data_base64. Same name replaces the old file.",
         inputSchema: uploadReferenceSchema,
       },
       async (args) => {
@@ -200,7 +200,7 @@ const mcpHandler = createMcpHandler(
       {
         title: "Get a fresh link for stored media",
         description:
-          "Return a new time-limited download link (valid 7 days) for a file saved by generate_image or edit_image, identified by its storage key.",
+          "Return a new time-limited download link (valid 7 days) for any stored file, identified by its storage key: a generated image or video (images/..., videos/...) or an uploaded reference (refs/...).",
         inputSchema: getMediaUrlSchema,
       },
       async (args) => {
@@ -308,7 +308,7 @@ const mcpHandler = createMcpHandler(
       {
         title: "List past generations",
         description:
-          "Search the history of images and videos made through this server, newest first. Returns storage keys (use get_media_url for a link) and task ids of unfinished videos.",
+          "Search the history of images and videos made through this server, newest first. Returns storage keys (use get_media_url for a link) and the task ids of unfinished work (call get_task_status to finish it).",
         inputSchema: listGenerationsSchema,
       },
       async (args) => {

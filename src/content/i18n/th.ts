@@ -19,38 +19,54 @@ export const th: Dictionary = {
     titleLead: "สร้างภาพและวิดีโอ",
     titleAccent: "แค่พิมพ์บอก",
     intro:
-      "Heenzaa Studio เชื่อม GPT Image และ Kling 2.6 เข้ากับแชท Claude ของคุณ ทุกภาพและทุกคลิปถูกเก็บไว้ในพื้นที่ส่วนตัว และรอคุณอยู่ในแกลเลอรี",
+      "Heenzaa Studio เชื่อม GPT Image 2 และ Kling 3.0 เข้ากับแชท Claude ของคุณ ทุกภาพและทุกคลิปถูกเก็บไว้ในพื้นที่ส่วนตัว และรอคุณอยู่ในแกลเลอรี",
     openGallery: "เปิดแกลเลอรี",
     connect: "เชื่อมต่อ Claude",
     heroToolDone: "เสร็จใน 48 วินาที",
     heroSaved: "บันทึกลงคลังแล้ว",
     madeHere: "ผลงานที่สร้างในสตูดิโอ",
     toolsEyebrow: "เครื่องมือ",
-    toolsTitle: "6 เครื่องมือ ในคอนเนกเตอร์เดียว",
+    toolsTitle: (count: number) => `${count} เครื่องมือ ในคอนเนกเตอร์เดียว`,
     tools: {
       generate_image: {
         medium: "ภาพ",
-        summary: "เปลี่ยนคำบรรยายเป็นภาพด้วย GPT Image ได้ทุกสัดส่วน ความละเอียดสูงสุด 4K",
+        summary: "เปลี่ยนคำบรรยายเป็นภาพด้วย GPT Image 2 ได้ทุกสัดส่วน ความละเอียดสูงสุด 4K",
       },
       edit_image: {
         medium: "ภาพ",
-        summary: "แก้หรือเปลี่ยนสไตล์ภาพเดิม ส่งภาพที่ได้ก่อนหน้าเข้าไปเพื่อปรับต่อไปเรื่อย ๆ",
+        summary: "แก้หรือเปลี่ยนสไตล์ภาพเดิม ส่งภาพที่ได้ก่อนหน้าหรือภาพอ้างอิงด้วย key เพื่อปรับต่อไปเรื่อย ๆ",
       },
       generate_video: {
         medium: "วิดีโอ",
-        summary: "สร้างคลิป 5 หรือ 10 วินาทีด้วย Kling 2.6 จากข้อความ หรือจากภาพของคุณ",
+        summary: "สร้างคลิป 3–15 วินาทีด้วย Kling 3.0 จากข้อความหรือเฟรมแรก ตัวละครหน้าตาคงเดิมด้วยภาพอ้างอิง",
       },
-      get_task_status: {
+      generate_talking_video: {
         medium: "วิดีโอ",
-        summary: "เช็คคลิปที่กำลังสร้าง และรับไฟล์เมื่อเสร็จ",
+        summary: "ให้ตัวละครพูดด้วยไฟล์เสียงของคุณเอง ปากขยับตรงเสียง ด้วย Kling AI Avatar",
+      },
+      upload_reference: {
+        medium: "ภาพอ้างอิง",
+        summary: "เก็บ character sheet หรือฉากไว้ครั้งเดียวด้วยชื่อ แล้วเรียกใช้ในทุกเครื่องมือด้วย key",
+      },
+      list_references: {
+        medium: "ภาพอ้างอิง",
+        summary: "ดูภาพอ้างอิงที่เก็บไว้ทั้งหมด พร้อม key ที่ใช้เรียก",
       },
       get_media_url: {
         medium: "คลังไฟล์",
         summary: "ขอลิงก์ดาวน์โหลดใหม่ของไฟล์ที่เก็บไว้ได้ทุกเมื่อ",
       },
+      get_task_status: {
+        medium: "สถานะงาน",
+        summary: "เช็คคลิป หรือภาพที่ใช้เวลานาน ที่กำลังสร้างอยู่ และรับไฟล์เมื่อเสร็จ",
+      },
       list_generations: {
         medium: "ประวัติ",
         summary: "ค้นทุกงานที่เคยสร้าง ตามประเภท สถานะ หรือคำในคำบรรยาย",
+      },
+      get_costs: {
+        medium: "ค่าใช้จ่าย",
+        summary: "ดูเครดิตและเงินบาทที่ใช้ไปในแต่ละโปรเจกต์และช็อต และต้นทุนต่อวินาทีของฟุตเทจที่ได้ใช้จริง",
       },
     },
     stepsEyebrow: "ทำงานอย่างไร",
@@ -58,7 +74,7 @@ export const th: Dictionary = {
     steps: [
       { title: "ขอ", detail: "บรรยายภาพหรือคลิปที่อยากได้ในแชท Claude ที่เปิดคอนเนกเตอร์ไว้" },
       { title: "ส่งต่อ", detail: "MCP server ตรวจคำขอแล้วเรียกโมเดล คีย์ต่าง ๆ ไม่เคยออกจากเซิร์ฟเวอร์" },
-      { title: "สร้าง", detail: "GPT Image วาดภาพ และ Kling 2.6 เรนเดอร์วิดีโอ ผ่าน KIE.ai" },
+      { title: "สร้าง", detail: "GPT Image 2 วาดภาพ และ Kling เรนเดอร์วิดีโอ ผ่าน KIE.ai" },
       { title: "เก็บ", detail: "ทุกไฟล์ถูกคัดลอกไปคลังส่วนตัวและบันทึกประวัติ จึงขึ้นในแกลเลอรีเอง" },
     ],
     connectEyebrow: "เชื่อมต่อ",
@@ -134,7 +150,8 @@ export const th: Dictionary = {
     chosen: "ใช้ take นี้",
     choose: "เลือก take นี้",
     references: "ต้นแบบ",
-    referencesHelp: "อัปโหลดผ่าน upload_reference ใช้ key นี้ใน edit_image หรือ generate_video ได้เลย",
+    referencesHelp:
+      "อัปโหลดผ่าน upload_reference ใช้ key นี้ใน edit_image, generate_video หรือ generate_talking_video ได้เลย",
     keyframes: "ภาพ (keyframe)",
     videos: "วิดีโอ (take)",
     madeFrom: "ทำจาก",

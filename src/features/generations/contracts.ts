@@ -49,7 +49,7 @@ export const listGenerationsSchema = z.object({
   status: z
     .enum(GENERATION_STATUSES)
     .optional()
-    .describe("pending = video still being made; fail = generation failed."),
+    .describe("pending = still being made (videos, or images that outlasted the wait); fail = generation failed."),
   query: z
     .string()
     .trim()

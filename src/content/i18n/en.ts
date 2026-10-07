@@ -19,38 +19,54 @@ export const en = {
     titleLead: "Make images and video",
     titleAccent: "just by asking.",
     intro:
-      "Heenzaa Studio brings GPT Image and Kling 2.6 into your Claude chats. Every picture and clip is saved to private storage and waits for you in the gallery.",
+      "Heenzaa Studio brings GPT Image 2 and Kling 3.0 into your Claude chats. Every picture and clip is saved to private storage and waits for you in the gallery.",
     openGallery: "Open gallery",
     connect: "Connect Claude",
     heroToolDone: "done in 48s",
     heroSaved: "saved to storage",
     madeHere: "Made in the studio",
     toolsEyebrow: "Tools",
-    toolsTitle: "Six tools, one connector.",
+    toolsTitle: (count: number) => `${count} tools, one connector.`,
     tools: {
       generate_image: {
         medium: "Image",
-        summary: "Turn a prompt into a picture with GPT Image, in any aspect ratio up to 4K.",
+        summary: "Turn a prompt into a picture with GPT Image 2, in any aspect ratio up to 4K.",
       },
       edit_image: {
         medium: "Image",
-        summary: "Restyle or change an existing image. Pass a previous result to keep iterating.",
+        summary: "Restyle or change an existing image. Pass a previous result or a reference by its key to keep iterating.",
       },
       generate_video: {
         medium: "Video",
-        summary: "Make a 5 or 10 second clip with Kling 2.6, from text or from one of your images.",
+        summary: "Make a 3 to 15 second clip with Kling 3.0 from text or a first frame, keeping characters consistent with reference images.",
       },
-      get_task_status: {
+      generate_talking_video: {
         medium: "Video",
-        summary: "Check a clip in progress and collect the file when it is done.",
+        summary: "Make a character speak your own voice track, mouth in sync, with Kling AI Avatar.",
+      },
+      upload_reference: {
+        medium: "References",
+        summary: "Save a character sheet or a set once under a name, then use it in any tool by its key.",
+      },
+      list_references: {
+        medium: "References",
+        summary: "See every saved reference and the key to use it by.",
       },
       get_media_url: {
         medium: "Storage",
         summary: "Get a fresh download link for anything saved in storage.",
       },
+      get_task_status: {
+        medium: "Status",
+        summary: "Check a clip, or an image that is taking long, and collect the file when it is done.",
+      },
       list_generations: {
         medium: "History",
         summary: "Search everything you have made by type, status or prompt.",
+      },
+      get_costs: {
+        medium: "Costs",
+        summary: "See credits and baht spent per project and shot, and what each second of kept footage cost.",
       },
     },
     stepsEyebrow: "How it works",
@@ -58,7 +74,7 @@ export const en = {
     steps: [
       { title: "Ask", detail: "Describe the picture or clip in a Claude chat with the connector on." },
       { title: "Route", detail: "The MCP server checks the request and calls the model. Keys never leave the server." },
-      { title: "Generate", detail: "GPT Image draws pictures and Kling 2.6 renders video, both through KIE.ai." },
+      { title: "Generate", detail: "GPT Image 2 draws pictures and Kling renders video, both through KIE.ai." },
       { title: "Keep", detail: "Every file is copied to private storage and logged, so it shows up in the gallery." },
     ],
     connectEyebrow: "Connect",
@@ -137,7 +153,8 @@ export const en = {
     shotSummary: (takes: number, failed: number) =>
       `${takes} ${takes === 1 ? "take" : "takes"}${failed > 0 ? `, ${failed} failed` : ""}`,
     references: "References",
-    referencesHelp: "Uploaded with upload_reference. Use the key in edit_image or generate_video.",
+    referencesHelp:
+      "Uploaded with upload_reference. Use the key in edit_image, generate_video or generate_talking_video.",
     keyframes: "Keyframes",
     videos: "Video takes",
     madeFrom: "Made from",

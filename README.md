@@ -1,467 +1,147 @@
-# Next.js + Tailwind + Drizzle + Observability
+# Heenzaa Studio
 
-Lean, production-ready starter for a Next.js App Router project with:
+An MCP server that lets Claude make images and video. You connect it to claude.ai
+as a custom connector, ask for a picture or a clip in a chat, and the server calls
+the models on [KIE.ai](https://kie.ai), copies every result into a private
+Cloudflare R2 bucket, and logs it in Postgres. A small private website shows the
+gallery, groups work into projects and shots, and reports what everything cost.
 
-- `pnpm`
-- Tailwind CSS v4 + shadcn/ui
-- Zod
-- Drizzle ORM + Drizzle Kit
-- Pino logging
-- `prom-client` metrics
-- OpenTelemetry tracing
-- Grafana Tempo local stack
-- Vitest + Playwright
-- Production Docker targets
+The repository started from a Next.js + Drizzle starter, which is why
+`package.json` is still named `nextjs-drizzle`.
 
-The template is intentionally not enterprise-heavy. Route files stay thin, feature logic lives together, infrastructure stays under `src/server`, and observability is included from day one.
+## MCP tools
+
+The endpoint is `POST /api/mcp` (Streamable HTTP, via `mcp-handler`).
+
+| Tool | What it does |
+| --- | --- |
+| `generate_image` | Text to image with GPT Image 2 (any aspect ratio, 1K/2K/4K). |
+| `edit_image` | Edit or restyle images with GPT Image 2 (or 1.5). Inputs are URLs or storage keys. |
+| `generate_video` | Kling 3.0 (3–15 s, first/last frame, up to 3 reference "elements") or Kling 2.6 (5/10 s). Returns a task id. |
+| `generate_talking_video` | Kling AI Avatar: animates a character so its mouth follows a given audio file. Returns a task id. |
+| `upload_reference` | Stores a reference image under a name (`refs/<name>.<ext>`) from a URL, a stored key or base64. |
+| `list_references` | Lists stored references and their keys. |
+| `get_media_url` | Fresh 7-day download link for any stored key (`images/…`, `videos/…`, `refs/…`). |
+| `get_task_status` | Checks a video task, or an image task that outlasted the 240 s wait; stores the file when done. |
+| `list_generations` | Searches the generation history. |
+| `get_costs` | Credits and baht per project and shot, chosen takes, cost per second used, KIE balance. |
+
+Image tools wait for the result (up to 240 s) and then return a link plus a
+storage key. Video tools return a task id at once; `get_task_status` collects the
+file later. Every generation tool also takes optional `project` and `shot` tags.
+
+Any input image can be a storage key instead of a URL. The server presigns it
+before KIE sees it, so a reference uploaded once keeps working after old links
+expire.
+
+## Web pages
+
+| Path | Access | Purpose |
+| --- | --- | --- |
+| `/` | public | What the studio is, the tools, how to connect. Shows only the showcase art in `public/showcase/`. |
+| `/gallery` | password | Every generation with filters, thumbnails, "check" for pending tasks, and project/shot assignment. |
+| `/projects`, `/projects/[id]` | password | Cost per project; shot board with references, keyframes, video takes, a frame inspector and "use this take". |
+| `/api/health` | public | Health JSON (app, database, tracing). |
+| `/metrics` | public | Prometheus metrics. |
+
+The site is in Thai by default, with English. All copy lives in
+`src/content/i18n/{th,en}.ts`.
+
+## How it fits together
+
+```text
+claude.ai ──▶ /api/mcp (token check) ──▶ src/features/<feature>/service.ts
+                                           ├─▶ KIE.ai jobs API (src/server/kie)
+                                           ├─▶ Cloudflare R2, private (src/server/storage)
+                                           └─▶ Neon Postgres via Drizzle (repository.ts)
+```
+
+- Route handlers stay thin; feature logic lives in `src/features/<feature>/`
+  (`contracts.ts` → `service.ts` → `repository.ts`); shared infrastructure lives in
+  `src/server/`.
+- Files are stored by key and never made public. Pages and tools hand out
+  presigned links instead (1 hour on pages, 7 days from tools).
+- Money is stored as KIE credits. Baht is credits × the rate set on `/projects`.
 
 ## Stack
 
-- Next.js `16.1.6`
-- React / React DOM `19.2.4`
-- Tailwind CSS `4.2.1`
-- shadcn `4.0.0`
-- Zod `4.3.6`
-- Pino `10.3.1`
-- prom-client `15.1.3`
-- OpenTelemetry SDK Node `0.213.0`
-- Vitest `4.0.18`
-- Playwright `1.58.2`
-- Drizzle ORM `0.45.1`
-- Drizzle Kit `0.31.9`
-- Neon serverless driver `1.1.0` (Postgres over HTTP)
+Next.js 16 (App Router, standalone output) · React 19 · Tailwind CSS v4 + shadcn/ui ·
+Zod 4 · Drizzle ORM on Neon Postgres (HTTP driver) · Cloudflare R2 via `aws4fetch` ·
+`sharp` for thumbnails · Pino · prom-client · OpenTelemetry → Grafana Tempo ·
+Vitest + Playwright · pnpm 10, Node ≥ 20.9.
 
-`eslint` is pinned to `9.39.4` because `eslint-config-next@16.1.6` still peers against the `9.x` line.
-
-## Quick Start
+## Local setup
 
 ```bash
 pnpm install
-Copy-Item .env.example .env.local
-pnpm db:migrate
-pnpm exec playwright install chromium
-pnpm observability:up
+Copy-Item .env.example .env.local   # PowerShell; use cp on macOS/Linux
+vercel env pull .env.local          # or paste DATABASE_URL etc. from Neon
 pnpm dev
 ```
 
-Open:
+> **Warning:** dev, preview and production share one Neon branch, so local runs
+> (including `pnpm e2e`) write to production data. Clean up test rows, or give dev
+> its own Neon branch.
 
-- App: `http://localhost:3000`
-- Grafana: `http://127.0.0.1:3001`
-- Tempo API: `http://127.0.0.1:3200`
+## Environment
+
+See `.env.example` for comments on each variable.
+
+| Variable | Needed for |
+| --- | --- |
+| `DATABASE_URL` | Runtime database (Neon pooled URL). |
+| `DATABASE_URL_UNPOOLED` | Migrations (direct URL); falls back to `DATABASE_URL`. |
+| `KIE_API_KEY` | All generation tools. Without it they return `kie_not_configured`. |
+| `MCP_AUTH_TOKEN` | Protects `/api/mcp`. Empty means no auth, for local dev only. |
+| `GALLERY_PASSWORD` | Opens `/gallery` and `/projects`. Empty keeps them closed. Changing it signs everyone out. |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Storage. All four are needed; without them tools return KIE's temporary links. |
+| `LOG_LEVEL`, `METRICS_PREFIX`, `OTEL_*` | Logging, metrics and tracing. Tracing is off by default. |
+
+## Connect to claude.ai
+
+1. Settings → Connectors → add a custom connector.
+2. URL: `https://<your-domain>/api/mcp`.
+3. Header: `Authorization: Bearer <MCP_AUTH_TOKEN>` (or `x-api-key: <token>`).
+4. Start a new chat with the connector on.
+
+The home page shows the exact endpoint URL with a copy button.
 
 ## Scripts
 
 ```bash
-pnpm dev                 # start Next.js dev server
-pnpm build               # production build
-pnpm start               # start production server
-pnpm lint                # ESLint
-pnpm typecheck           # TypeScript checks
-pnpm test                # Vitest once
-pnpm e2e                 # migrate, build, and run Playwright
-pnpm check               # lint + typecheck + unit tests
-pnpm db:generate         # generate migration files from schema changes
+pnpm dev                 # dev server
+pnpm check               # lint + typecheck + unit tests (run for every code change)
+pnpm e2e                 # migrate, build, Playwright
+pnpm db:generate         # migration from schema changes
 pnpm db:migrate          # apply migrations
 pnpm db:studio           # Drizzle Studio
-pnpm observability:up    # start Grafana + Tempo
-pnpm observability:down  # stop Grafana + Tempo and remove volumes
-pnpm observability:logs  # tail Grafana + Tempo logs
-pnpm observability:test  # verify traces reach Tempo end-to-end
-```
-
-## Docker
-
-Build the production image:
-
-```bash
-docker build --target runner -t nextjs-drizzle:prod .
-```
-
-Build the migration image:
-
-```bash
-docker build --target migrator -t nextjs-drizzle:migrator .
-```
-
-Run migrations against Neon (use the direct, non-pooled URL):
-
-```bash
-docker run --rm -e DATABASE_URL_UNPOOLED=postgresql://... nextjs-drizzle:migrator
-```
-
-Run the app:
-
-```bash
-docker run --rm -p 3000:3000 -e DATABASE_URL=postgresql://... nextjs-drizzle:prod
-```
-
-Docker notes:
-
-- The runtime image uses Next.js `standalone` output.
-- The runtime image runs as a non-root user.
-- The database is Neon Postgres; pass `DATABASE_URL` at runtime. Nothing is stored in the container.
-- Use the `migrator` target before starting the app when schema changes exist.
-
-## Environment
-
-`.env.example`:
-
-```bash
-APP_NAME=Next.js Drizzle Template
-DATABASE_URL=postgresql://user:password@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require
-DATABASE_URL_UNPOOLED=postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-LOG_LEVEL=info
-METRICS_PREFIX=nextjs_drizzle_
-OTEL_TRACING_ENABLED=false
-OTEL_SERVICE_NAME=nextjs-drizzle
-OTEL_SERVICE_VERSION=0.1.0
-OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
-OTEL_TRACE_IGNORE_PATHS=/_next/*,/favicon.ico,/metrics
-OTEL_TRACE_SAMPLE_RATIO=1
-```
-
-Notes:
-
-- The database is Neon Postgres, reached through Neon's HTTP driver (it cannot talk to other Postgres servers).
-- On Vercel, the Neon integration sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`; locally, pull them with `vercel env pull`.
-- Migrations use `DATABASE_URL_UNPOOLED` when set, otherwise `DATABASE_URL`.
-- `OTEL_TRACING_ENABLED=false` by default so local app startup works without a collector.
-
-## Project Shape
-
-```text
-src/
-  app/               pages, layouts, route handlers
-  components/        reusable UI and site shell components
-  content/           shared content for docs-style pages
-  features/          contracts, services, repositories by feature
-  server/            env, db, logging, tracing, metrics, http helpers
-drizzle/             generated SQL migrations
-ops/                 local Grafana + Tempo provisioning
-scripts/             smoke tests and local automation
-tests/
-  unit/              Vitest + Testing Library
-  e2e/               Playwright
-```
-
-## Architecture Rules
-
-- Keep `src/app` thin.
-- Put business rules inside `src/features/<feature>`.
-- Put shared infrastructure in `src/server`.
-- Keep migration artifacts in `drizzle/`, not under runtime app code.
-- Keep observability route -> service -> repository -> DB trace continuity intact.
-- Do not introduce heavy controller/service/repository abstraction layers everywhere unless there is a real problem to solve.
-
-## Existing Example Flow
-
-The repo includes a full sample feature: subscribers.
-
-Files involved:
-
-- Route: `src/app/api/subscribers/route.ts`
-- Validation contract: `src/features/subscribers/contracts.ts`
-- Service: `src/features/subscribers/service.ts`
-- Repository: `src/features/subscribers/repository.ts`
-- Schema: `src/server/db/schema.ts`
-- Client form: `src/components/subscribe-form.tsx`
-
-This is the reference pattern to follow for new features.
-
-## How To Add Database Tables Or Columns
-
-If you want to add new database data structures, the main places are:
-
-### 1. Update the schema
-
-Edit:
-
-- `src/server/db/schema.ts`
-
-This is the source of truth for Drizzle schema definitions.
-
-Examples:
-
-- add a new table
-- add a new column
-- add indexes or constraints
-
-### 2. Add or update feature code
-
-If the schema change belongs to a feature, update or create:
-
-- `src/features/<feature>/contracts.ts`
-- `src/features/<feature>/service.ts`
-- `src/features/<feature>/repository.ts`
-
-Typical responsibilities:
-
-- `contracts.ts`: Zod schemas and input/output types
-- `service.ts`: business rules and orchestration
-- `repository.ts`: Drizzle queries
-
-### 3. Generate and apply migrations
-
-```bash
-pnpm db:generate
-pnpm db:migrate
-```
-
-Generated SQL will be written into:
-
-- `drizzle/`
-
-Do not hand-write schema changes only in SQL and forget the TypeScript schema. The TypeScript schema must stay authoritative.
-
-### 4. Update tests
-
-Usually at least one of these should change:
-
-- `tests/unit/...`
-- `tests/e2e/...`
-
-If the new table affects an API or page, test the feature path, not only the schema definition.
-
-## How To Add A New API
-
-If you need a business API endpoint, follow this pattern.
-
-### 1. Create the route handler
-
-Create:
-
-- `src/app/api/<resource>/route.ts`
-
-or, for a nested route:
-
-- `src/app/api/<resource>/<id>/route.ts`
-
-Keep it thin:
-
-- parse request
-- call service
-- return response
-
-Use the shared observation wrapper:
-
-- `src/server/http/observed-route.ts`
-
-The current example is:
-
-- `src/app/api/subscribers/route.ts`
-
-### 2. Create or update the feature module
-
-Add or update:
-
-- `src/features/<feature>/contracts.ts`
-- `src/features/<feature>/service.ts`
-- `src/features/<feature>/repository.ts`
-
-Pattern:
-
-- validate input with Zod in `contracts.ts`
-- call business logic in `service.ts`
-- perform Drizzle queries in `repository.ts`
-
-### 3. Use tracing and logging correctly
-
-The route wrapper already creates the route span and metrics wiring.
-
-Inside the feature service:
-
-- create feature spans with stable names
-- add useful low-cardinality attributes
-- log structured events through `src/server/logger.ts`
-
-Inside repositories:
-
-- keep DB spans readable
-- avoid high-cardinality span names
-
-### 4. Add tests
-
-Usually add:
-
-- a unit test for feature/service logic
-- an e2e test for the route
-
-Example places:
-
-- `tests/unit/subscriber-service.test.ts`
-- `tests/e2e/home.spec.ts`
-
-### 5. Update docs pages if the route matters to users/operators
-
-If the route is public or operationally important, update:
-
-- `src/content/site.ts`
-- `/guide`
-- `/operations`
-
-## How To Add A New Frontend Page
-
-If you want to add a user-facing page:
-
-### 1. Create the page route
-
-Create:
-
-- `src/app/<segment>/page.tsx`
-
-Examples already in the repo:
-
-- `src/app/page.tsx`
-- `src/app/guide/page.tsx`
-- `src/app/operations/page.tsx`
-
-### 2. Reuse the shared layout pieces
-
-Prefer reusing:
-
-- `src/components/site-header.tsx`
-- `src/components/site-footer.tsx`
-- `src/components/page-shell.tsx`
-- `src/components/page-hero.tsx`
-
-This keeps the public site visually coherent.
-
-### 3. Put shared copy/data in the content layer when appropriate
-
-If the page is docs-like or content-heavy, prefer:
-
-- `src/content/site.ts`
-
-instead of hardcoding repeated content in multiple files.
-
-### 4. Use the existing UI stack
-
-- Tailwind CSS v4
-- shadcn/ui primitives from `src/components/ui`
-
-Avoid introducing a second UI pattern or a generic admin-theme look that fights the current visual language.
-
-### 5. Respect typed routes
-
-This repo has:
-
-- `typedRoutes: true`
-
-When using `next/link` with href values coming from data objects, use `Route` typing/casts as needed.
-
-### 6. Add tests
-
-For a new visible page:
-
-- add a unit render test if useful
-- add an e2e check if the page is important or linked from the main flow
-
-## Where To Put Different Kinds Of Code
-
-- New page UI: `src/app/...` and `src/components/...`
-- Shared marketing/docs copy: `src/content/site.ts`
-- New business rules: `src/features/<feature>/service.ts`
-- New request/response validation: `src/features/<feature>/contracts.ts`
-- New SQL queries: `src/features/<feature>/repository.ts`
-- Shared db schema: `src/server/db/schema.ts`
-- Shared observability code: `src/server/observability/...`
-- Shared HTTP helpers: `src/server/http/...`
-- Shared env config: `src/server/env.ts`
-
-## Observability
-
-Key pieces:
-
-- `proxy.ts`
-  injects request IDs and marks ignored trace paths
-- `instrumentation.ts`
-  registers the OpenTelemetry SDK
-- `src/server/http/observed-route.ts`
-  wraps routes for metrics, logging, and tracing
-- `src/server/observability/*`
-  metrics store, tracing helpers, path ignore logic, request context
-- `src/app/metrics/route.ts`
-  exposes Prometheus text format
-
-Expected trace shape for the sample flow:
-
-```text
-incoming request
-  -> app.route span
-  -> subscribers.create span
-  -> db.subscribers.select span
-  -> db.subscribers.insert span
-```
-
-## Why `/metrics` Is Not Inside `/api`
-
-This is correct in the current project.
-
-Reason:
-
-- `/metrics` is an operational endpoint, not a business API.
-- Prometheus and many monitoring setups conventionally expect the scrape path to be `/metrics`.
-- Keeping it at the root avoids unnecessary custom scrape-path configuration.
-- In Next.js App Router, a route handler can live anywhere there is a `route.ts`; it does not have to be under `/api`.
-- The repo already treats `/api/*` as application/business endpoints such as `/api/subscribers` and `/api/health`, while `/metrics` is infrastructure-facing.
-
-So:
-
-- business/application JSON endpoints -> usually under `/api/...`
-- operational scrape endpoint -> `/metrics`
-
-If you moved it to `/api/metrics`, it would still work technically, but it would be a worse default for observability conventions.
-
-## Testing Expectations
-
-Run at least what matches your change:
-
-```bash
-pnpm check
-pnpm e2e
-pnpm observability:test
-```
-
-Use this rule of thumb:
-
-- docs/code-structure/UI change -> `pnpm check`
-- user-visible page or route change -> `pnpm check` + `pnpm e2e`
-- observability change -> `pnpm check` + `pnpm observability:test`
-- Docker/runtime change -> Docker build and container startup checks
-- schema change -> `pnpm db:generate`, `pnpm db:migrate`, then tests
-
-## Operational Endpoints
-
-- `GET /api/health`
-  health JSON for app/database/tracing status
-- `GET /metrics`
-  Prometheus metrics exposition
-- `POST /api/subscribers`
-  sample end-to-end feature flow
-
-## Local Observability Workflow
-
-Start local stack:
-
-```bash
-pnpm observability:up
-```
-
-Verify traces and Tempo wiring:
-
-```bash
-pnpm observability:test
-```
-
-Stop local stack:
-
-```bash
+pnpm observability:up    # local Grafana + Tempo
+pnpm observability:test  # check that traces reach Tempo
 pnpm observability:down
 ```
 
-## Notes For Future Changes
+## Deploy
 
-- Keep the sample subscriber flow healthy unless intentionally replacing it with another reference feature.
-- Keep the public pages `/`, `/guide`, and `/operations` aligned with the actual state of the project.
-- If you add new important runtime endpoints, document them here and in the guide/operations pages.
+Production runs on Vercel with the Neon integration, which sets `DATABASE_URL`
+and `DATABASE_URL_UNPOOLED`. `/api/mcp` sets `maxDuration = 300` because image
+tools wait for KIE.
+
+Docker targets exist too: `runner` for the app and `migrator` for migrations.
+
+```bash
+docker build --target runner -t heenzaa-studio .
+docker build --target migrator -t heenzaa-studio:migrator .
+docker run --rm -e DATABASE_URL_UNPOOLED=postgresql://... heenzaa-studio:migrator
+docker run --rm -p 3000:3000 -e DATABASE_URL=postgresql://... heenzaa-studio
+```
+
+## Working on it
+
+- `AGENTS.md` is the rulebook: architecture, UI, observability, database, and the
+  Safe Change Checklist.
+- Every non-trivial change starts with a design doc in `docs/design/`, and every
+  change ends with a record in `docs/changes/`. The workflow is described in
+  `docs/README.md`.
+- New features follow `.claude/skills/add-feature/`.
+- A new MCP tool also needs an entry in `toolNames` (`src/content/site.ts`) and
+  in both dictionaries. A unit test fails until it is listed.

@@ -161,7 +161,9 @@ export const getTaskStatusSchema = z.object({
     .string()
     .trim()
     .regex(/^[A-Za-z0-9_-]{1,128}$/, "Invalid task id.")
-    .describe("task_id returned by generate_video."),
+    .describe(
+      "task_id returned by generate_video or generate_talking_video, or by generate_image/edit_image when they reported the image as still running.",
+    ),
 });
 
 export type GetTaskStatusInput = z.infer<typeof getTaskStatusSchema>;

@@ -11,18 +11,25 @@ export const navigationItems = [
   { href: "/projects", key: "projects" },
 ] as const;
 
+// Every tool registered in src/app/api/mcp/route.ts, in the order the home
+// page shows them: making things, the file library, then keeping track.
+// tests/unit/home-page.test.tsx fails when a registered tool is missing here.
 export const toolNames = [
   "generate_image",
   "edit_image",
   "generate_video",
-  "get_task_status",
+  "generate_talking_video",
+  "upload_reference",
+  "list_references",
   "get_media_url",
+  "get_task_status",
   "list_generations",
+  "get_costs",
 ] as const;
 
 export type ToolName = (typeof toolNames)[number];
 
-export const models = ["GPT Image", "Kling 2.6", "Cloudflare R2"] as const;
+export const models = ["GPT Image 2", "Kling 3.0", "Kling AI Avatar", "Cloudflare R2"] as const;
 
 // Public showcase art made with the studio itself for this page (not the
 // owner's private gallery). Files live in public/showcase.
